@@ -113,6 +113,22 @@ session_pgsql.vacuum_interval
   by using cron or like in db server if you have multiple web servers
   accessed to the session db server(s).
 
+[Functions]
+/* {{{ proto array session_pgsql_status(void)
+   Returns current pgsql save handler status */
+/* {{{ proto bool session_pgsql_reset(void)
+   Reset connection to session database servsers */
+/* {{{ proto array session_pgsql_info(void)
+   Returns current session info */
+/* {{{ proto bool session_pgsql_set_field(string value)
+   Set custom field value */
+/* {{{ proto string session_pgsql_get_field(void)
+   Get custom field value */
+/* {{{ proto bool session_pgsql_add_error(int error_level [, string error_message])
+   Increments error counts and sets last error message */
+/* {{{ proto array session_pgsql_get_error([bool with_error_message])
+   Returns number of errors and last error message */
+
 [Known Problem]
 Please report problem to the author.
 
