@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.20 2003/01/18 02:01:18 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.21 2003/01/18 02:02:56 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -56,10 +56,10 @@ php_session_pgsql_globals session_pgsql_globals;
 #endif
 
 static void php_session_pgsql_init_globals(php_session_pgsql_globals *session_pgsql_globals_p TSRMLS_DC);
-static int php_ps_pgsql_init_servers(int force_init TSRMLS_DC);
+static int php_ps_pgsql_init_servers(const int force_init TSRMLS_DC);
 static int php_ps_pgsql_init_mm(TSRMLS_D);
-static int php_ps_pgsql_create_table(int id TSRMLS_DC);
-static PGconn *php_ps_pgsql_connect(int id TSRMLS_DC);
+static int php_ps_pgsql_create_table(const int id TSRMLS_DC);
+static PGconn *php_ps_pgsql_connect(const int id TSRMLS_DC);
 static PGconn *php_ps_pgsql_get_db(const char *key TSRMLS_DC);
 
 static int ps_pgsql_app_read(TSRMLS_D);
@@ -406,7 +406,7 @@ static int php_ps_pgsql_init_mm(TSRMLS_D)
 
 /* {{{ php_ps_pgsql_init_servers
  */
-static int php_ps_pgsql_init_servers(int force_init TSRMLS_DC) 
+static int php_ps_pgsql_init_servers(const int force_init TSRMLS_DC) 
 {
 	int id;
 	static int initialized = 0;
@@ -445,7 +445,7 @@ static int php_ps_pgsql_init_servers(int force_init TSRMLS_DC)
 
 /* {{{ php_pg_pgsql_create_table
  */
-static int php_ps_pgsql_create_table(int id TSRMLS_DC) 
+static int php_ps_pgsql_create_table(const int id TSRMLS_DC) 
 {
 	PGresult *pg_result;
 	char *query_create_sess_table =
@@ -520,7 +520,7 @@ cleanup:
 
 /* {{{ php_ps_pgsql_connect
  */
-static PGconn *php_ps_pgsql_connect(int id TSRMLS_DC)
+static PGconn *php_ps_pgsql_connect(const int id TSRMLS_DC)
 {
 	if (!PS_PGSQL(connstr)[id]) {
 		/* bailout while debugging. PS_PGSQL(connstr)[id] can be null when
