@@ -189,6 +189,9 @@ field index, user must use this field order.
  - More efficient application variable handling
 
 [History]
+ 0.5.2 - 2003/1/17
+  - Fixed shared module build.
+
  0.5.1 - 2003/1/17
   - Fixed short_circuit option. 
 
