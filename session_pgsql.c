@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.21 2003/01/18 02:02:56 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.22 2003/01/18 02:05:06 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -123,7 +123,7 @@ STD_PHP_INI_ENTRY("session_pgsql.keep_expired",  "0",    PHP_INI_SYSTEM, OnUpdat
 STD_PHP_INI_ENTRY("session_pgsql.use_app_vars",  "0",    PHP_INI_SYSTEM, OnUpdateBool, use_app_vars, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.serializable",  "0",    PHP_INI_SYSTEM, OnUpdateBool, serializable, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.gc_interval",   "3600", PHP_INI_SYSTEM, OnUpdateInt, gc_interval, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session_pgsql.vacuum_interval", "18000", PHP_INI_SYSTEM, OnUpdateInt, vacuum_interval, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.vacuum_interval", "21600", PHP_INI_SYSTEM, OnUpdateInt, vacuum_interval, php_session_pgsql_globals, session_pgsql_globals)
 PHP_INI_END()
 /* }}} */
 
