@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.12 2003/01/17 03:21:35 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.13 2003/01/17 04:17:20 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -20,6 +20,7 @@
 #include <assert.h>
 #include "php.h"
 #include "php_ini.h"
+#include "php_config.h"
 #include "ext/standard/info.h"
 #include "ext/standard/php_string.h"
 #include "ext/standard/php_var.h"
