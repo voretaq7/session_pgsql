@@ -1,8 +1,8 @@
 dnl
-dnl $Id: config.m4,v 1.1 2002/02/17 02:35:54 yohgaki Exp $
+dnl $Id: config.m4,v 1.2 2003/01/16 07:56:49 yohgaki Exp $
 dnl
 
-PHP_ARG_WITH(session-pgsql,for pgsql sesssion support,
+PHP_ARG_WITH(session-pgsql,for pgsql sesssion storage support,
 [  --with-session-pgsql[=DIR] Include pgsql(PostgreSQL) support for session storage])
 
 if test "$PHP_SESSION_PGSQL" != "no"; then
@@ -24,30 +24,29 @@ if test "$PHP_SESSION_PGSQL" != "no"; then
   fi
 
   if test -z "MM_DIR/lib/libmm.so"; then
-    AC_MSG_ERROR([cannot find libmm.so /usr/local /usr])
+    AC_MSG_ERROR([cannot find libmm.so under /usr/local /usr])
   fi
+
+dnl  PHP_CHECK_LIBRARY($LIBNAME, $LIBSYMBOL,
+dnl   [
+dnl     AC_DEFINE(HAVE_MMLIB,1,[Whether you have libmm or not])
+dnl   ],[
+dnl     AC_MSG_ERROR([wrong libmm])
+dnl   ],[
+dnl     -L$MM_DIR/lib
+dnl   ])
   
-  PHP_CHECK_LIBRARY($LIBNAME, $LIBSYMBOL,
-   [
-     PHP_ADD_LIBRARY_WITH_PATH($LIBNAME, $MM_DIR/lib, MM_SHARED_LIBADD)
-     AC_DEFINE(HAVE_MMLIB,1,[Whether you have libmm or not])
-   ],[
-     AC_MSG_ERROR([wrong libmm version or libmm not found])
-   ],[
-     -L$MM_DIR/lib
-   ])
-  
-  PHP_SUBST(MM_SHARED_LIBADD)
   PHP_ADD_INCLUDE($MM_DIR/include)
+  PHP_ADD_LIBRARY_WITH_PATH($LIBNAME, $MM_DIR/lib, SESSION_PGSQL_SHARED_LIBADD)
 
   dnl
   dnl check libpq
   dnl
   LIBNAME=pq
-  LIBSYMBOL=PQexec
+  LIBSYMBOL=PQescapeString
 
   if test "$PHP_SESSION_PGSQL" = "yes"; then
-    PGSQL_SEARCH_PATHS="/usr /usr/local /usr/local/pgsql"
+    PGSQL_SEARCH_PATHS="/usr/local/pgsql /usr/local /usr"
   else
     PGSQL_SEARCH_PATHS=$PHP_SESSION_PGSQL
   fi
@@ -79,19 +78,20 @@ if test "$PHP_SESSION_PGSQL" != "no"; then
     AC_MSG_ERROR([Unable to find libpq anywhere under $withval])
   fi
 
-  PHP_CHECK_LIBRARY($LIBNAME, $LIBSYMBOL,
-   [
-     PHP_ADD_LIBRARY_WITH_PATH($LIBNAME, $PGSQL_LIBDIR, PGSQL_SHARED_LIBADD)
-     AC_DEFINE(HAVE_LIBPQ,1,[Whether you have libpq or not])
-   ],[
-     AC_MSG_ERROR([wrong libpq version or libpq not found])
-   ],[
-     -L$PGSQL_LIBDIR
-   ])
-  
-  PHP_SUBST(PGSQL_SHARED_LIBADD)
+dnl  PHP_CHECK_LIBRARY($LIBNAME, $LIBSYMBOL,
+dnl   [
+dnl     AC_DEFINE(HAVE_LIBPQ,1,[Whether you have libpq or not])
+dnl   ],[
+dnl     AC_MSG_ERROR([wrong libpq version (Need PostgreSQL 7.2.x or later)])
+dnl   ],[
+dnl     -L$PGSQL_LIBDIR
+dnl   ])
+
   PHP_ADD_INCLUDE($PGSQL_INCLUDE)
+  PHP_ADD_LIBRARY_WITH_PATH($LIBNAME, $PGSQL_LIBDIR, SESSION_PGSQL_SHARED_LIBADD)
+  
+  PHP_SUBST(SESSION_PGSQL_SHARED_LIBADD)
 
   AC_DEFINE(HAVE_SESSION_PGSQL, 1, [Whether you have pgsql session save handler])
-  PHP_EXTENSION(session_pgsql, $ext_shared)
+  PHP_NEW_EXTENSION(session_pgsql, session_pgsql.c, $ext_shared)
 fi

@@ -1,7 +1,0 @@
-
-LTLIBRARY_NAME    = libsession_pgsql.la
-LTLIBRARY_SOURCES = session_pgsql.c
-LTLIBRARY_SHARED_NAME = session_pgsql.la
-LTLIBRARY_SHARED_LIBADD = $(SESSION_SHARED_LIBADD)
-
-include $(top_srcdir)/build/dynlib.mk

@@ -1,16 +1,6 @@
 /* 
    +----------------------------------------------------------------------+
-   | PHP Version 4                                                        |
-   +----------------------------------------------------------------------+
-   | Copyright (c) 1997-2002 The PHP Group                                |
-   +----------------------------------------------------------------------+
-   | This source file is subject to version 2.02 of the PHP license,      |
-   | that is bundled with this package in the file LICENSE, and is        |
-   | available at through the world-wide-web at                           |
-   | http://www.php.net/license/2_02.txt.                                 |
-   | If you did not receive a copy of the PHP license and are unable to   |
-   | obtain it through the world-wide-web, please send a note to          |
-   | license@php.net so we can mail you a copy immediately.               |
+   | This source file is subject to LGPL license.                         |
    +----------------------------------------------------------------------+
    | Authors: yohgaki@php.net                                             |
    +----------------------------------------------------------------------+
@@ -27,6 +17,7 @@
 
 #include <libpq-fe.h>
 #include "ext/session/php_session.h"
+#include "main/SAPI.h"
 
 extern ps_module ps_mod_pgsql;
 #define ps_pgsql_ptr &ps_mod_pgsql
@@ -36,27 +27,42 @@ extern zend_module_entry session_pgsql_module_entry;
 
 PS_FUNCS(pgsql);
 
-#define MAX_PGSQL_SERVERS 16
+/* MAX_PGSQL_SERVERS should be prim number for better distribution */
+#define MAX_PGSQL_SERVERS 31
+#define PS_DEFAULT_PGSQL_FILE "/tmp/php_session_pgsql"
 
 typedef struct _php_session_pgsql_globals {
 	char *db;
 	int create_table;
-	int failover;
-	int loadbalance;
 	int serializable;
 	int use_app_vars;
+	char *sem_file_name;
+	int gc_interval;
+	int vacuum_interval;
+	int failover_mode;
+	int disable;
 
 	PGconn *pgsql_link[MAX_PGSQL_SERVERS];
-	char *connstr[MAX_PGSQL_SERVERS];
-	int table_exist[MAX_PGSQL_SERVERS];
-	int servers;
+	PGconn *current_db;
+	int current_id;
+	char *connstr[MAX_PGSQL_SERVERS]; /* malloc/free should be used */
+	int servers; /* better to use prim number. i.e. 2,3,5,7,11... session db servers */
 	int sess_new;
 	int sess_del;
 	int sess_cnt;
-	int gc_interval;
-	time_t last_gc;
+	int sess_error;
+	int sess_warning;
+	int sess_notice;
+	int sess_created;
+	int sess_modified;
+	int sess_expire;
+	char *sess_custom; /* malloc/free should be used */
+	char *sess_error_message; /* malloc/free should be used */
+	char *sess_addr_created; /* malloc/free should be used */
+	char *sess_addr_modified; /* malloc/free should be used */
+	char *remote_addr; /* malloc/free should be used */
 	int maxlifetime;
-	int failovered;
+	
 	int app_modified;
 	int app_new;
 
@@ -65,7 +71,10 @@ typedef struct _php_session_pgsql_globals {
 
 /* php function registration */
 PHP_FUNCTION(session_pgsql_status);
+PHP_FUNCTION(session_pgsql_reset);
 PHP_FUNCTION(session_pgsql_info);
+PHP_FUNCTION(session_pgsql_set_field);
+PHP_FUNCTION(session_pgsql_get_field);
 PHP_FUNCTION(session_pgsql_add_error);
 PHP_FUNCTION(session_pgsql_get_error);
 
@@ -73,9 +82,11 @@ PHP_FUNCTION(session_pgsql_get_error);
 extern int session_pgsql_globals_id;
 #define PS_PGSQL(v) TSRMG(session_pgsql_globals_id, php_session_pgsql_globals *, v)
 #else
-extern php_session_pgsql_globals session_pgsql_globals;
+extern php_session_pgsql_globals session_pgsql_globalsb;
 #define PS_PGSQL(v) (session_pgsql_globals.v)
 #endif
+
+extern SAPI_API sapi_module_struct sapi_module;
 
 #else
 
