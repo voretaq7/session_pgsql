@@ -17,14 +17,13 @@ CREATE TABLE php_session (
   ps_created       integer,
   ps_modified      integer,
   ps_expire        integer,
-  ps_addr_created  cidr,
-  ps_addr_modified cidr,
+  ps_addr_created  text,
+  ps_addr_modified text,
+  ps_access        integer,
   ps_error         integer,
   ps_warning       integer,
   ps_notice        integer,
-  ps_err_message   text,
-  ps_counter       integer,
-  ps_reserved      integer
+  ps_err_message   text
 );
 
 CREATE INDEX php_session_idx ON php_session USING BTREE (ps_id);
@@ -41,9 +40,7 @@ CREATE TABLE php_app_vars (
 NOTE: If you use HASH for index, you'll have deadlock problem. DO
 NOT USE HASH INDEX.
 
-User may *append* additional fields, ps_reserved fields are place
-holder for additional feature. Since mod_pgsql accesses field using
-field index, user must use this field order.
+User may *append* additional fields.
 
 How to use
 
@@ -54,16 +51,18 @@ your system must have libpq and headers installed.
 
 Following php.ini directives has special meanings for mod_pgsql
 
-session.save_handler      : "pgsql" for mod_pgsql session.
-session.pgsql_db          : Valid PostgreSQL database connection string. 
+session.save_handler       : "pgsql" for mod_pgsql session.
+session.pgsql_db           : Valid PostgreSQL database connection string. 
                             For example, "host=pgsql dbname=session user=php"
-session.pgsql_use_app_var : Use application level variable or not.
+session.pgsql_use_app_var  : Use application level variable or not.
                             Use different session name to change application.
-                            (i.e. use session_name('AppName'))
+                            (i.e. use session_name('AppName')) Default is 1.
 session.pgsql_create_table : Automatically create session and application 
-                             variable table.
-session.pgsql_gc_interval : How often perform GC in seconds. Default
-                            is 3600 seconds.
+                             variable table. Default is 1.
+session.pgsql_gc_interval  : How often perform GC in seconds. Default
+                            is 3600 seconds. session.gc_probability is ignored.
+session.pgsql_serializable : Use serializable transaction isolation level for
+                             session handling. Default is 0.
 
 
 How it works
@@ -83,27 +82,38 @@ faster than pgsql save handler. mm handler does not work for me :(
 
 How to customize
 
-Since mod_pgsql uses PostgreSQL database. User can add more fields to
-session database and create session access functions as user
-want. Keep in mind that user is not supposed to order of standard
-fields. User fields are must be defined after mod_pgsql fields.
+Since mod_pgsql uses PostgreSQL database. User can append more fields
+to session database and create session access functions as user
+want. User fields should be defined after session_pgsql fields.
 
 Known Problem
- - Many.
-
-ToDo
- - More efficient application variable handling
- - Simple fail over
- - Load balancing
+ - None. Please report problems.
 
 History
- 0.1 is released 2002/1/12
+ Version 0.1 is released 2002/1/12
   - Initial release with plain a normal session save handler 
     feature. 
- 0.2 is released 2002/2/20
-  - Added application variable support.
- 0.3 is released 2002/X/XX
+
+ Version 0.2 is released 2002/2/20
+  - Added application variable ($_APP) support.
+
+ Version 0.3 is released 2002/X/XX
   - Added module functions. session_pgsql_info(), session_pgsql_add_errer() and
     session_pgsql_get_error().
 
-  
+Road Map
+ Version 0.4 
+  - Improve application variable ($_APP). Use cached value and prevent
+    storing the same value.
+
+ Version 0.5
+  - Add semi-constant applcation verialbe ($_CONST).
+
+ Version 0.6
+  - Add failover feature
+
+ Version 0.9
+  - Add load balance feature.
+
+ Version 1.0
+  - Stable version 
