@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.23 2003/01/18 02:15:38 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.24 2003/01/18 02:34:04 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -942,8 +942,6 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		smart_str_free(&buf);
 		efree(query);
 	}
-	efree(escaped_key);
-	efree(escaped_val);
 
 	/* save error message is any */
 	if (PS_PGSQL(sess_error_message)) {
@@ -956,6 +954,8 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		error_message_len = PQescapeString(escaped_error_message, PS_PGSQL(sess_error_message), len);
 		smart_str_appends(&buf, "UPDATE php_session SET sess_err_message = '");
 		smart_str_appendl(&buf, escaped_error_message, error_message_len);
+		smart_str_appends(&buf, "' WHERE sess_id='");
+		smart_str_appends(&buf, escaped_key);
 		smart_str_appendl(&buf, "';", 2);
 		smart_str_0(&buf);
 		
@@ -965,6 +965,9 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		smart_str_free(&buf);
 		efree(escaped_error_message);
 	}
+	efree(escaped_key);
+	efree(escaped_val);
+	
 	pg_result = PQexec(PS_PGSQL(current_db), "END;");
 	if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
 		PQclear(pg_result);
