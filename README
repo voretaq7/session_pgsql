@@ -1,9 +1,5 @@
         PostgreSQL database session save handler module
 
-*WARNING*
-This session save handler is EXPERIMENTAL. Anything may be 
-changed/deleted/added without notice. This code is considered as beta.
-
 [What is it]
 
 session_pgsql is an additional session save handler module. It
@@ -22,14 +18,61 @@ provides session storage using PostgreSQL database server(s).
 
 It is design to scale any size of web sites.
 
-[How to use]
+[Requirements]
+PHP 4.3.0 or later
+PostgreSQL 7.2.0 or later as server
+libpq that comes with PostgreSQL 7.2.0 or later (and header to build)
+libmm (and header. I use mm-1.2.1)
+
+[How to compile]
 
 To compile PHP with mod_pgsql, you need "--with-session-pgsql[=DIR]"
 when you configure PHP. [=DIR] is installation path for
 PostgreSQL. You don't have to compile PHP with PostgreSQL module, but
-your system must have libpq and headers installed.
-It also uses libmm your system must have libmm and headers installed
-to compile.
+your system must have libpq and headers installed.  It also uses libmm
+your system must have libmm and headers installed to compile.
+
+1. Change directory to <php source root>/ext and move tar ball to
+   there.
+2. Unpack session_pgsql source
+   % tar zxvf session_pgsql-<version>.tar.bz2
+   You may need to bunzip first if your tar don't recognize bz2 
+   compression
+3. Change directory to <php source root> then
+   % ./buildconf
+   % ./configure --with-session-pgsql <other configure options>
+   % make
+   % make install
+4. If you choose to build stand alone module with "--with-session-pgsql=shared"
+   Do not forget to edit php.ini to load session_pgsql.so.
+5. Reboot your web server.
+
+You may also want to compile session pgsql as stand alone php module.
+To compile session_pgsql as stand alone module without PHP source, you
+need PHP header and build tools installed. These files are install when
+"make install" is done with PHP source. If you are using RPM, these files
+are likely included in php-devel package.
+
+1. Unpack session_pgsql source.
+   % tar zxvf session_pgsql-<version>.tar.bz2
+2. Change directory to session_pgsql
+   % cd session_pgsql
+3. Run phpize. This will creates configure script and files needed.
+   % phpize
+4. Run configure script, build and install module
+   % ./configure --with-session-pgsql
+   % make
+   % make install
+   This will build and install session_pgsql.so module and install
+   the module file to php module directory.
+5. Edit your php.ini to load session_pgsql. Add following line to
+   php.ini
+   extension=session_pgsql.so
+6. Verify with phpinfo() if session_pgsql is loaded or not. If it's
+   not loaded, try to use full path to load module.
+7. Reboot your web server.
+
+[How to use]
 
 Once you have successfully installed session_pgsql (and PHP of course)
 and PostgreSQL to localhost. All you have to do is (as postgres super user)
@@ -49,10 +92,13 @@ server or even multiple PostgreSQL servers, edit session_pgsql.db php.ini
 configuration directive.
 
 NOTE: It cannot be used with CGI/CLI binary or dl() or loading from .htaccess.
+NOTE: It's good idea to have more secure setting. Change security options 
+      according your security needs.
 
 [php.ini settings]
 
-Following php.ini directives has special meanings for mod_pgsql
+Following php.ini directives are recognized by session and session_pgsql
+module.
 
 session.save_handler
   "pgsql" for session_pgsql session.
@@ -95,7 +141,7 @@ session_pgsql.create_table
 session_pgsql.short_circuit
   If short_circuit is set to on, it will skip UPDATE statement when 
   skipping is possible. Setting error or custom field value or SESSION
-  array will makde session_pgsql save changes to table, otherwise
+  array will make session_pgsql save changes to table, otherwise
   it will not update table.  Access counter and expire field will not 
   be updated when update is skipped.
   Default is off.
@@ -128,11 +174,11 @@ session_pgsql.vacuum_interval
   accessed to the session db server(s).
   Default is 18000 seconds (5 hours).
 
-[Functions]
+[Module Functions]
 /* {{{ proto array session_pgsql_status(void)
    Returns current pgsql save handler status */
 /* {{{ proto bool session_pgsql_reset(void)
-   Reset connection to session database servsers */
+   Reset connection to session database servers */
 /* {{{ proto array session_pgsql_info(void)
    Returns current session info */
 /* {{{ proto bool session_pgsql_set_field(string value)
@@ -189,6 +235,9 @@ field index, user must use this field order.
  - More efficient application variable handling
 
 [History]
+ 0.6.0 - 2003/1/18
+  - Stable release candidate.
+
  0.5.2 - 2003/1/17
   - Fixed shared module build.
 
@@ -208,3 +257,4 @@ field index, user must use this field order.
   - Added application variable support.
 
  0.1.0 - 2002/1/12
+  - Initial test release.
