@@ -2,7 +2,7 @@
 
 *WARNING*
 This session save handler is EXPERIMENTAL. Anything may be 
-changed/deleted/added without notice. It is considered as alpha.
+changed/deleted/added without notice. This code is considered as beta.
 
 [What is it]
 
@@ -158,6 +158,12 @@ field index, user must use this field order.
  - More efficient application variable handling
 
 [History]
+ 0.5.1 - 2003/1/17
+  - Fixed short_circuit option. 
+
+ 0.5.0 - 2003/1/17
+  - Added short_circuit option. 
+
  0.4.1 - 2003/1/16
   - Added all features planned. Alpha release.
 
