@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.17 2003/01/17 10:11:02 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.18 2003/01/17 23:08:19 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -771,7 +771,7 @@ static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC
 				expire = PQgetvalue(pg_result, 0, 0);
 				exp = (time_t)atoi(expire);
 				if ((exp < now) && !PS_PGSQL(keep_expired)) {
-					/* expired. delete and create */
+					/* session is expired. delete and create record. */
 					PS_PGSQL(sess_del) = 1;
 				}
 				else {
@@ -819,12 +819,12 @@ static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC
 		php_error(E_NOTICE,"session pgsql: Invalid Session ID detected");
 	}
 	if (*vallen == 0) {
-		*val = empty_string;
+		*val = estrndup("", 0);
 	}
 	/* save values for short circuit */
-	if (PS_PGSQL(sess_new)) {
+	if (PS_PGSQL(sess_new) || PS_PGSQL(sess_del)) {
 		PS_PGSQL(sess_vallen) = 0;
-		PS_PGSQL(sess_val) = empty_string;
+		PS_PGSQL(sess_val) = estrndup("", 0);
 	}
 	else {
 		PS_PGSQL(sess_vallen) = *vallen;
@@ -980,27 +980,34 @@ static int ps_pgsql_sess_gc(TSRMLS_D)
 	char *query_gc = "DELETE FROM php_session WHERE sess_expire < %d;";
 	char *query_vacuum = "VACUUM ANALYZE php_session; VACUUM ANALYZE php_app_vars; REINDEX TABLE php_session;";
 	int id;
+	time_t now = time(NULL);
 
 	ELOG("GC Called");
-	sprintf(query, query_gc, time(NULL));
+	/* Send query at once */
+	sprintf(query, query_gc, now);
 	if (*(ps_pgsql_instance->last_gc) &&
-		*(ps_pgsql_instance->last_gc) < time(NULL) - PS_PGSQL(gc_interval)) {
-		*(ps_pgsql_instance->last_gc) = time(NULL);
+		*(ps_pgsql_instance->last_gc) < now - PS_PGSQL(gc_interval)) {
+		*(ps_pgsql_instance->last_gc) = now;
 		for (id = 0; id < PS_PGSQL(servers); id++) {
 			if (PS_PGSQL(pgsql_link)[id]) {
-				pg_result = PQexec(PS_PGSQL(pgsql_link)[id], query);
-				PQclear(pg_result);
+				PQsendQuery(PS_PGSQL(pgsql_link)[id], query);
 			}
 		}
 	}
 	if (*(ps_pgsql_instance->last_vacuum) &&
-		*(ps_pgsql_instance->last_vacuum) < time(NULL) - PS_PGSQL(vacuum_interval)) {
-		*(ps_pgsql_instance->last_vacuum) = time(NULL);
+		*(ps_pgsql_instance->last_vacuum) < now - PS_PGSQL(vacuum_interval)) {
+		*(ps_pgsql_instance->last_vacuum) = now;
 		for (id = 0; id < PS_PGSQL(servers); id++) {
 			if (PS_PGSQL(pgsql_link)[id]) {
-				pg_result = PQexec(PS_PGSQL(pgsql_link)[id], query_vacuum);
-				PQclear(pg_result);
+				PQsendQuery(PS_PGSQL(pgsql_link)[id], query_vacuum);
 			}
+		}
+	}
+	/* Get result and clear */
+	for (id = 0; id < PS_PGSQL(servers); id++) {
+		if (PS_PGSQL(pgsql_link)[id]) {
+			while ((pg_result = PQgetResult(PS_PGSQL(pgsql_link)[id])))
+				PQclear(pg_result);
 		}
 	}
 	return SUCCESS;
