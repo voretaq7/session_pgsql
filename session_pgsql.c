@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.7 2003/01/16 10:32:39 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.8 2003/01/17 00:21:49 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -55,7 +55,8 @@ php_session_pgsql_globals session_pgsql_globals;
 #endif
 
 static void php_session_pgsql_init_globals(php_session_pgsql_globals *session_pgsql_globals_p TSRMLS_DC);
-static int php_ps_pgsql_init_servers(TSRMLS_D);
+static int php_ps_pgsql_init_servers(int force_init TSRMLS_DC);
+static int php_ps_pgsql_init_mm(TSRMLS_D);
 static int php_ps_pgsql_create_table(int id TSRMLS_DC);
 static PGconn *php_ps_pgsql_connect(int id TSRMLS_DC);
 static PGconn *php_ps_pgsql_get_db(const char *key TSRMLS_DC);
@@ -165,7 +166,6 @@ ZEND_GET_MODULE(session_pgsql)
  */
 PHP_MINIT_FUNCTION(session_pgsql)
 {
-	smart_str buf={0};
 #ifdef ZTS
 	php_session_pgsql_globals *session_pgsql_globals;
 	ts_allocate_id(&session_pgsql_globals_id, sizeof(php_session_pgsql_globals),
@@ -190,53 +190,15 @@ PHP_MINIT_FUNCTION(session_pgsql)
 		PS_PGSQL(disable) = 1;
 		return SUCCESS; /* Don't spit annoying error messages */
 	}
-	
-	ps_pgsql_instance = calloc(sizeof(*ps_pgsql_instance), 1);
-   	if (!ps_pgsql_instance) {
+	/* init mm */
+	if (php_ps_pgsql_init_mm(TSRMLS_C) == FAILURE) {
 		return FAILURE;
 	}
-	
-	/* create shared memory file using sapi_name */
-	if (PS_PGSQL(sem_file_name) && PS_PGSQL(sem_file_name)[0]) {
-		smart_str_appends(&buf,PS_PGSQL(sem_file_name));
-	}
-	else {
-		smart_str_appends(&buf, PS_DEFAULT_PGSQL_FILE);
-	}
-	smart_str_appends(&buf,sapi_module.name);
-	smart_str_append_long(&buf,getpid());
-	smart_str_0(&buf);
-	ps_pgsql_instance->mm = mm_create(0, buf.c);
-	smart_str_free(&buf);
-	if (!ps_pgsql_instance->mm) {
-		mm_destroy(ps_pgsql_instance->mm);
-		free(ps_pgsql_instance);
-		php_log_err("session pgsql: MM failure" TSRMLS_CC);		
-		return FAILURE;
-	}
-	ps_pgsql_instance->last_gc = mm_calloc(ps_pgsql_instance->mm, 1, sizeof(time_t));
-	if (!ps_pgsql_instance->mm) {
-		mm_destroy(ps_pgsql_instance->mm);
-		free(ps_pgsql_instance);
-		php_log_err("session pgsql: MM failure" TSRMLS_CC);		
-		return FAILURE;
-	}
-	ps_pgsql_instance->last_vacuum = mm_calloc(ps_pgsql_instance->mm, 1, sizeof(time_t));
-	ps_pgsql_instance->owner = getpid();
-	*(ps_pgsql_instance->last_gc) = time(NULL) + PS_PGSQL(gc_interval);
-	*(ps_pgsql_instance->last_vacuum) = time(NULL) + PS_PGSQL(vacuum_interval);
 	/* init $_APP hash */
 	if (PS_PGSQL(use_app_vars)) {
 		zend_register_auto_global("_APP", sizeof("_APP")-1 TSRMLS_CC);
 	}
 	
-	/* initilize postgresql server connections */
-	if (php_ps_pgsql_init_servers(TSRMLS_C) == FAILURE) {
-		/* No servers are available */
-		php_log_err("session pgsql: Cannot connect to any PostgreSQL server. Check session_pgsql.db" TSRMLS_CC);
-		return FAILURE; 
-	}
-
 	/* register pgsql session save handler */
 	php_session_register_module(&ps_mod_pgsql);
 
@@ -311,6 +273,13 @@ PHP_RINIT_FUNCTION(session_pgsql)
 		return SUCCESS;
 	}
 	
+	/* initilize postgresql server connections */
+	if (php_ps_pgsql_init_servers(0 TSRMLS_CC) == FAILURE) {
+		/* No servers are available */
+		php_log_err("session pgsql: Cannot connect to any PostgreSQL server. Check session_pgsql.db" TSRMLS_CC);
+		return FAILURE; 
+	}
+
 	/* These clean up cannot be done at rshutdown, since it executed
 	   before session write. */
 	if (PS_PGSQL(sess_custom)) {
@@ -387,11 +356,63 @@ static void php_session_pgsql_init_globals(php_session_pgsql_globals *session_pg
 }
 /* }}} */
 
+/* {{{ php_ps_pgsql_init_mm
+ */
+static int php_ps_pgsql_init_mm(TSRMLS_D)
+{
+	smart_str buf={0};
+
+	ps_pgsql_instance = calloc(sizeof(*ps_pgsql_instance), 1);
+   	if (!ps_pgsql_instance) {
+		return FAILURE;
+	}
+	
+	/* create shared memory file using sapi_name */
+	if (PS_PGSQL(sem_file_name) && PS_PGSQL(sem_file_name)[0]) {
+		smart_str_appends(&buf,PS_PGSQL(sem_file_name));
+	}
+	else {
+		smart_str_appends(&buf, PS_DEFAULT_PGSQL_FILE);
+	}
+	smart_str_appends(&buf,sapi_module.name);
+	smart_str_append_long(&buf,getpid());
+	smart_str_0(&buf);
+	ps_pgsql_instance->mm = mm_create(0, buf.c);
+	smart_str_free(&buf);
+	if (!ps_pgsql_instance->mm) {
+		mm_destroy(ps_pgsql_instance->mm);
+		free(ps_pgsql_instance);
+		php_log_err("session pgsql: MM failure" TSRMLS_CC);		
+		return FAILURE;
+	}
+	ps_pgsql_instance->last_gc = mm_calloc(ps_pgsql_instance->mm, 1, sizeof(time_t));
+	if (!ps_pgsql_instance->mm) {
+		mm_destroy(ps_pgsql_instance->mm);
+		free(ps_pgsql_instance);
+		php_log_err("session pgsql: MM failure" TSRMLS_CC);		
+		return FAILURE;
+	}
+	ps_pgsql_instance->last_vacuum = mm_calloc(ps_pgsql_instance->mm, 1, sizeof(time_t));
+	ps_pgsql_instance->owner = getpid();
+	*(ps_pgsql_instance->last_gc) = time(NULL) + PS_PGSQL(gc_interval);
+	*(ps_pgsql_instance->last_vacuum) = time(NULL) + PS_PGSQL(vacuum_interval);
+
+	return SUCCESS;
+}
+/* }}} */
+
 /* {{{ php_ps_pgsql_init_servers
  */
-static int php_ps_pgsql_init_servers(TSRMLS_D) 
+static int php_ps_pgsql_init_servers(int force_init TSRMLS_DC) 
 {
 	int id;
+	static int initialized = 0;
+
+	if (!force_init && initialized) {
+		return SUCCESS;
+	}
+	
+	initialized = 1;
 	for (id = 0; id < PS_PGSQL(servers); id++) {
 		assert(PS_PGSQL(connstr)[id]);
 		/* if link is bad, NULL is returned */
@@ -1113,7 +1134,7 @@ PHP_FUNCTION(session_pgsql_reset)
 		RETURN_FALSE;
 	}
 
-	if (php_ps_pgsql_init_servers(TSRMLS_C) == FAILURE) {
+	if (php_ps_pgsql_init_servers(1 TSRMLS_CC) == FAILURE) {
 		RETURN_FALSE;
 	}
 	RETURN_TRUE;
