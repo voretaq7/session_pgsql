@@ -11,23 +11,23 @@ Please report problems to http://bugs.php.net/ or php-dev@lists.php.net.
 Session Table Definition
 
 CREATE TABLE php_session (
-  sess_id            char(32),
-  sess_name          char(32),
-  sess_data          text,
-  sess_created       integer,
-  sess_modified      integer,
-  sess_expire        integer,
-  sess_addr_created  cidr,
-  sess_addr_modified cidr,
-  sess_error         integer,
-  sess_warning       integer,
-  sess_notice        integer,
-  sess_err_message   text,
-  sess_counter       integer,
-  sess_reserved      integer
+  ps_id            char(32),
+  ps_name          char(32),
+  ps_data          text,
+  ps_created       integer,
+  ps_modified      integer,
+  ps_expire        integer,
+  ps_addr_created  cidr,
+  ps_addr_modified cidr,
+  ps_error         integer,
+  ps_warning       integer,
+  ps_notice        integer,
+  ps_err_message   text,
+  ps_counter       integer,
+  ps_reserved      integer
 );
 
-CREATE INDEX php_session_idx ON php_session USING BTREE (sess_id);
+CREATE INDEX php_session_idx ON php_session USING BTREE (ps_id);
 
 Application Variable Table Definition
 
@@ -41,7 +41,7 @@ CREATE TABLE php_app_vars (
 NOTE: If you use HASH for index, you'll have deadlock problem. DO
 NOT USE HASH INDEX.
 
-User may *append* additional fields, sess_reserved fields are place
+User may *append* additional fields, ps_reserved fields are place
 holder for additional feature. Since mod_pgsql accesses field using
 field index, user must use this field order.
 
@@ -98,5 +98,12 @@ ToDo
 
 History
  0.1 is released 2002/1/12
+  - Initial release with plain a normal session save handler 
+    feature. 
  0.2 is released 2002/2/20
   - Added application variable support.
+ 0.3 is released 2002/X/XX
+  - Added module functions. session_pgsql_info(), session_pgsql_add_errer() and
+    session_pgsql_get_error().
+
+  

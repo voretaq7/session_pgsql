@@ -16,7 +16,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.2 2002/02/20 06:58:53 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.3 2002/02/21 06:39:48 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -144,20 +144,20 @@ static int php_ps_pgsql_create_table(int id TSRMLS_DC)
 	PGresult *pg_result;
 	char *query =
 	"CREATE TABLE php_session ( "
-	"sess_id            text, "
-	"sess_name          text, "
-	"sess_data          text, "
-	"sess_created       integer, "
-	"sess_modified      integer, "
-	"sess_expire        integer, "
-	"sess_addr_created  cidr, "
-	"sess_addr_modified cidr, "
-	"sess_error         integer, "
-	"sess_warning       integer, "
-	"sess_notice        integer, "
-	"sess_err_message   text, "
-	"sess_counter       integer, "
-	"sess_reserved      integer); ";
+	"ps_id            text, "
+	"ps_name          text, "
+	"ps_data          text, "
+	"ps_created       integer, "
+	"ps_modified      integer, "
+	"ps_expire        integer, "
+	"ps_addr_created  text, "
+	"ps_addr_modified text, "
+	"ps_error         integer, "
+	"ps_warning       integer, "
+	"ps_notice        integer, "
+	"ps_err_message   text, "
+	"ps_access       integer, "
+	"ps_reserved      integer); ";
 	char *query_app_vars =
 	"CREATE TABLE php_app_vars ( "
 	"app_modified       integer, "
@@ -179,7 +179,7 @@ static int php_ps_pgsql_create_table(int id TSRMLS_DC)
 		}
 		PQclear(pg_result);
 		pg_result = PQexec(PS_PGSQL(pgsql_link)[id],
-						   "CREATE INDEX php_session_idx ON php_session USING BTREE (sess_id);");
+						   "CREATE INDEX php_session_idx ON php_session USING BTREE (ps_id);");
 		PQclear(pg_result);
 		pg_result = PQexec(PS_PGSQL(pgsql_link)[id], query_app_vars);
 		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
@@ -254,7 +254,7 @@ static int php_ps_pgsql_gc(TSRMLS_D)
 {
 	PGresult *pg_result;
 	char query[QUERY_BUF_SIZE+1];
-	char *query_tmpl = "DELETE FROM php_session WHERE sess_expire < %d;";
+	char *query_tmpl = "DELETE FROM php_session WHERE ps_expire < %d;";
 	int id;
 
 	ELOG("GC Called");
@@ -398,10 +398,11 @@ int ps_pgsql_app_read(PGconn *pg_link TSRMLS_DC)
 	if (PS_PGSQL(use_app_vars)) {
 		sprintf(query, "SELECT app_vars FROM php_app_vars WHERE app_name = '%s';", PS(session_name));
 		pg_result = PQexec(pg_link, query);
-		MAKE_STD_ZVAL(PS_PGSQL(app_vars));				
+		ALLOC_ZVAL(PS_PGSQL(app_vars));				
 		if (PQresultStatus(pg_result) == PGRES_TUPLES_OK) {
 			if (PQntuples(pg_result) == 0) {
 				array_init(PS_PGSQL(app_vars));
+				INIT_PZVAL(PS_PGSQL(app_vars));
 				ZEND_SET_GLOBAL_VAR_WITH_LENGTH("_APP", sizeof("_APP"), PS_PGSQL(app_vars), 1, 0);
 				PS_PGSQL(app_new) = 1;
 			}
@@ -415,6 +416,7 @@ int ps_pgsql_app_read(PGconn *pg_link TSRMLS_DC)
 				php_var_unserialize(&PS_PGSQL(app_vars), (const char **)&data, data + strlen(data), &var_hash TSRMLS_CC); 
 				PHP_VAR_UNSERIALIZE_DESTROY(var_hash);
 				ZEND_SET_GLOBAL_VAR_WITH_LENGTH("_APP", sizeof("_APP"), PS_PGSQL(app_vars), 1, 0);
+				INIT_PZVAL(PS_PGSQL(app_vars));
 			}
  		}
 		else {
@@ -511,13 +513,16 @@ PS_READ_FUNC(pgsql)
 	PGresult *pg_result;
 	ExecStatusType pg_status;
 	char query[QUERY_BUF_SIZE+1];
-	char *query_tpl = "SELECT sess_expire, sess_counter, sess_data FROM php_session WHERE sess_id = '%s';";
+	char *query_tpl = "SELECT ps_expire, ps_access, ps_data FROM php_session WHERE ps_id = '%s';";
 	int ret = FAILURE;
 
 	ELOG("READ Called");
 	assert(PS(session_name));
+
+	if (!(pg_link = php_ps_pgsql_get_link(key TSRMLS_CC))) {
+		return FAILURE;
+	}
 	
-	pg_link = php_ps_pgsql_get_link(key TSRMLS_CC);
 	if (pg_link == NULL) {
 		return FAILURE;
 	}
@@ -574,7 +579,7 @@ PS_READ_FUNC(pgsql)
 					PS_PGSQL(sess_del) = 1;
 				}
 				else {
-					PS_PGSQL(sess_cnt) = (int)atoi(PQgetvalue(pg_result, 0, 1));
+					PS_PGSQL(sess_cnt) = (int)atoi(PQgetvalue(pg_result, 0, 1)) + 1;
 					/* PQgetvalue reuturns "" for NULL */
 					*val = PQgetvalue(pg_result, 0, 2);
 					if (*val) {
@@ -619,58 +624,84 @@ PS_READ_FUNC(pgsql)
 PS_WRITE_FUNC(pgsql)
 {
 	PGconn *pg_link;
+	PGresult *pg_result;
 	size_t query_len;
 	time_t now, exp;
 	char *data;
 	char *query;
 	char *query_delete =
-	   "DELETE FROM php_session WHERE sess_id = '%s';";
+	   "DELETE FROM php_session WHERE ps_id = '%s';";
 	char *query_insert =
-	   "INSERT INTO php_session (sess_id, sess_created, sess_modified, sess_expire, sess_counter, sess_data) "
-	   "VALUES ('%s', %d, %d, %d, 1, '%s');";
+	   "INSERT INTO php_session (ps_id, ps_created, ps_modified, ps_expire, ps_access, ps_addr_created, ps_addr_modified, ps_data) "
+	   "VALUES ('%s', %d, %d, %d, 1, '%s', '%s', '%s');";
 	char *query_update =
-	   "UPDATE php_session SET sess_data = '%s', sess_modified = %d , sess_expire = %d "
-	   "WHERE sess_id = '%s';";
+	   "UPDATE php_session SET ps_modified = %d , ps_expire = %d, ps_access = %d, ps_addr_modified = '%s', ps_data = '%s' "
+	   "WHERE ps_id = '%s';";
  	int len; 
+	zval *addr = NULL;
 
 	ELOG("WRITE Called");
 
-	pg_link = php_ps_pgsql_get_link(key TSRMLS_CC);
+	if (!(pg_link = php_ps_pgsql_get_link(key TSRMLS_CC))) {
+		return FAILURE;
+	}
+	
 	if (PS_PGSQL(sess_del)) {
 		query_len = strlen(query_delete)+strlen(key);
 		query = emalloc(query_len+1);
 		sprintf(query, query_delete, key);
-		PQsendQuery(pg_link, query);
+		pg_result = PQexec(pg_link, query);
 		efree(query);
+		PQclear(pg_result);		
 	}
 
 	now = time(NULL);
 	exp = now + PS(gc_maxlifetime);
 	data = (void *)php_addslashes((char *)val, strlen(val), &len, 0 TSRMLS_CC);
+	MAKE_STD_ZVAL(addr);
+/* 	if (zend_hash_find(Z_ARRVAL_P(PG(http_globals)[TRACK_VARS_SERVER]), "REMOTE_ADDR", sizeof("REMOTE_ADDR"),(void **)&addr) == FAILURE) { */
+/* 		Z_STRVAL_P(addr) = ""; */
+/* 		Z_STRLEN_P(addr) = 0; */
+/* 	} */
+	Z_STRVAL_P(addr) = "Not implemented";
+	Z_STRLEN_P(addr) = sizeof("Not implemented");
+		
 	if (PS_PGSQL(sess_new)) {
 		/* INSERT */
 		query_len = strlen(query_insert)+strlen(data)+strlen(key)+120;
 		query = emalloc(query_len+1);
-		sprintf(query, query_insert, key, now, now, exp, data);
-		PQsendQuery(pg_link, query);
+ 		sprintf(query, query_insert, key, now, now, exp, Z_STRVAL_P(addr), Z_STRVAL_P(addr), data);
+		pg_result = PQexec(pg_link, query);
+		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+			php_error(E_WARNING, "PostgreSQL session. %s", PQresultErrorMessage(pg_result));
+		}
+		PQclear(pg_result);		
 	}
 	else {
 		/* UPDATE */
 		query_len = strlen(query_update)+strlen(key)+strlen(data)+120;
 		query = emalloc(query_len+1);
-		sprintf(query, query_update, data, now, exp, key);
-		PQsendQuery(pg_link, query);
+ 		sprintf(query, query_update, now, exp, PS_PGSQL(sess_cnt), Z_STRVAL_P(addr), data, key);
+		pg_result = PQexec(pg_link, query);
+		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+			php_error(E_WARNING, "PostgreSQL session. %s", PQresultErrorMessage(pg_result));
+		}
+		PQclear(pg_result);		
 	}
 	efree(query);
 	efree(data);
+	FREE_ZVAL(addr);
 
 	/* Save Application Variables */
 	if (PS_PGSQL_CHECK_APP_MODIFIED()) {
 		ps_pgsql_app_write(pg_link TSRMLS_CC);
 	}
 	
-/*  	PQsendQuery(pg_link, "END;"); */
-	PQexec(pg_link, "END;");
+	pg_result = PQexec(pg_link, "END;");
+	if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+		php_error(E_WARNING, "PostgreSQL session. %s", PQresultErrorMessage(pg_result));
+	}
+	PQclear(pg_result);
 
 	return SUCCESS;	
 }
@@ -684,12 +715,15 @@ PS_DESTROY_FUNC(pgsql)
 	PGresult *pg_result;
 	size_t query_len;
 	char *query;
-	char *query_update = "DELETE FROM php_session WHERE sess_id = '%s';";
+	char *query_update = "DELETE FROM php_session WHERE ps_id = '%s';";
 	int ret = FAILURE;
 
 	ELOG("DESTROY Called");
 	
-	pg_link = php_ps_pgsql_get_link(key TSRMLS_CC);
+	if (!(pg_link = php_ps_pgsql_get_link(key TSRMLS_CC))) {
+		return FAILURE;
+	}
+
 	if (ps_pgsql_valid_str(key TSRMLS_CC)) {
 		query_len = strlen(query_update)+strlen(key);
 		query = (char *)emalloc(query_len+1);
@@ -720,7 +754,23 @@ PS_GC_FUNC(pgsql)
    Returns current pgsql save handler status */
 PHP_FUNCTION(session_pgsql_status)
 {
+	PGconn *pg_link;
+	
+	if (ZEND_NUM_ARGS() != 0) {
+		WRONG_PARAM_COUNT;
+		RETURN_FALSE;
+	}
+	
+	if (!PS(id)) {
+		php_error(E_NOTICE, "%s() cannot find session id.",
+				  get_active_function_name(TSRMLS_C));
+		RETURN_FALSE;
+	}
 
+	if (!(pg_link = php_ps_pgsql_get_link(PS(id) TSRMLS_CC))) {
+		RETURN_STRING("Session pgsql is NOT working", 1);
+	}
+	RETURN_STRING("Session pgsql is working", 1);
 }
 /* }}} */
 
@@ -728,15 +778,166 @@ PHP_FUNCTION(session_pgsql_status)
    Returns current session info */
 PHP_FUNCTION(session_pgsql_info)
 {
+	PGconn *pg_link;
+	PGresult *pg_result;
+	int argc = ZEND_NUM_ARGS();
+	char *id = NULL;
+	size_t id_len = 0;
+	char query[QUERY_BUF_SIZE+1];
+	char *query_select = "SELECT ps_created, ps_addr_created, ps_modified, ps_addr_modified, ps_expire, ps_access, ps_error, ps_warning, ps_notice, ps_err_message  FROM php_session WHERE ps_id = '%s';";
 
+	if (zend_parse_parameters(argc TSRMLS_CC, "|l",
+							  &id, &id_len) == FAILURE) {
+		return;
+	}
+	if (id_len > 32) {
+		php_error(E_NOTICE, "%s() accepts session id string.",
+				  get_active_function_name(TSRMLS_C));
+		RETURN_FALSE;
+	}
+	if (!id)
+		id = PS(id);
+	
+	if (!(pg_link = php_ps_pgsql_get_link(PS(id) TSRMLS_CC))) {
+		php_error(E_WARNING, "%s() cannot find valid connection.",
+				  get_active_function_name(TSRMLS_C));
+		RETURN_FALSE;
+	}
+
+	sprintf(query, query_select, id);
+	pg_result = PQexec(pg_link, query);
+	if (PQresultStatus(pg_result) != PGRES_TUPLES_OK) {
+		PQclear(pg_result);
+		php_error(E_NOTICE, "%s() query failed. %s",
+				  get_active_function_name(TSRMLS_C), PQresultErrorMessage(pg_result));
+		RETURN_FALSE;
+	}
+	if (PQntuples(pg_result) == 0) {
+		PQclear(pg_result);
+		php_error(E_NOTICE, "%s() cannot find session record. %s",
+				  get_active_function_name(TSRMLS_C), PQresultErrorMessage(pg_result));
+		RETURN_FALSE;
+	}
+	array_init(return_value);
+	add_assoc_long(return_value, "Date Created", atoi(PQgetvalue(pg_result, 0, 0)));
+	add_assoc_string(return_value, "Created By", PQgetvalue(pg_result, 0, 1), 1);
+	add_assoc_long(return_value, "Date Modified", atoi(PQgetvalue(pg_result, 0, 2)));
+	add_assoc_string(return_value, "Modified By", PQgetvalue(pg_result, 0, 3), 1);
+	add_assoc_long(return_value, "Expire", atoi(PQgetvalue(pg_result, 0, 4)));
+	add_assoc_long(return_value, "Access", atoi(PQgetvalue(pg_result, 0, 5)));
+	add_assoc_long(return_value, "Error", atoi(PQgetvalue(pg_result, 0, 6)));
+	add_assoc_long(return_value, "Warning", atoi(PQgetvalue(pg_result, 0, 7)));
+	add_assoc_long(return_value, "Notice", atoi(PQgetvalue(pg_result, 0, 8)));
+	add_assoc_string(return_value, "Error Message", PQgetvalue(pg_result, 0, 9), 1);	
 }
 /* }}} */
 
-/* {{{ proto bool session_pgsql_add_error(int error_level [[, string error_message], string session_id])
+/* {{{ proto bool session_pgsql_add_error(int error_level [, string error_message])
    Increments error counts and sets last error message */
 PHP_FUNCTION(session_pgsql_add_error)
 {
+	PGconn *pg_link;
+	PGresult *pg_result;
+	int argc = ZEND_NUM_ARGS();
+	int err_lvl;
+	char *err_msg = NULL;
+	size_t err_msg_len = 0;
+	char query[QUERY_BUF_SIZE+1];
+	char *query_select = "SELECT ps_error, ps_warning, ps_notice FROM  php_session WHERE ps_id = '%s';";
+	char *query_update =
+	"UPDATE php_session SET "
+	"ps_err_message = '%s', "
+	"ps_error = %d, "
+	"ps_warning = %d, "
+	"ps_notice = %d "
+	"WHERE ps_id = '%s';";
+	char *query_update2 =
+	"UPDATE php_session SET "
+	"ps_error = %d, "
+	"ps_warning = %d, "
+	"ps_notice = %d "
+	"WHERE ps_id = '%s';";	
+	int cnt_error, cnt_warning, cnt_notice;
+	
+	if (zend_parse_parameters(argc TSRMLS_CC, "l|s",
+							  &err_lvl, &err_msg, &err_msg_len) == FAILURE) {
+		return;
+	}
 
+	if (!PS(id)) {
+		php_error(E_NOTICE, "%s() cannot find session id",
+				  get_active_function_name(TSRMLS_C));
+		RETURN_FALSE;
+	}
+
+	if (!(pg_link = php_ps_pgsql_get_link(PS(id) TSRMLS_CC))) {
+		php_error(E_WARNING, "%s() cannot find valid connection",
+				  get_active_function_name(TSRMLS_C));
+		RETURN_FALSE;
+	}
+	
+	sprintf(query, query_select, PS(id));
+	pg_result = PQexec(pg_link, query);
+	if (PQresultStatus(pg_result) != PGRES_TUPLES_OK) {
+		PQclear(pg_result);
+		php_error(E_NOTICE, "%s() query failed (%s)",
+				  get_active_function_name(TSRMLS_C), PQresultErrorMessage(pg_result));
+		RETURN_FALSE;
+	}
+	if (PQgetvalue(pg_result, 0, 0))
+		cnt_error = atoi(PQgetvalue(pg_result, 0, 0));
+	else
+		cnt_error = 0;
+	if (PQgetvalue(pg_result, 0, 1))
+		cnt_warning = atoi(PQgetvalue(pg_result, 0, 1));
+	else
+		cnt_warning = 0;
+	if (PQgetvalue(pg_result, 0, 2))
+		cnt_notice = atoi(PQgetvalue(pg_result, 0, 2));
+	else
+		cnt_notice = 0;
+	
+	switch (err_lvl) {
+		case E_USER_ERROR:
+			cnt_error++;
+			break;
+		case E_USER_WARNING:
+			cnt_warning++;
+			break;
+		case E_USER_NOTICE:
+			cnt_notice++;
+			break;
+		default:
+			php_error(E_WARNING, "%s() expects E_USER_ERROR, E_USER_WARNING or E_USER_NOTICE for 1st arg",
+					  get_active_function_name(TSRMLS_C));
+			RETURN_FALSE;
+	}
+		
+	if (argc = 1) {
+		if (err_msg_len > 400) {
+			php_error(E_NOTICE, "%s() error message is too long and trancated (Max 400 bytes)",
+					  get_active_function_name(TSRMLS_C));
+			err_msg_len = 400;
+			err_msg[400] = '\0';
+		}
+		err_msg = php_addslashes(err_msg, err_msg_len, &err_msg_len, 0 TSRMLS_CC);
+		sprintf(query, query_update, err_msg, cnt_error, cnt_warning, cnt_notice, PS(id));
+		efree(err_msg);
+	}
+	else {
+		sprintf(query, query_update2, cnt_error, cnt_warning, cnt_notice, PS(id));
+	}
+	
+	pg_result = PQexec(pg_link, query);
+	if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+		PQclear(pg_result);
+		php_error(E_NOTICE, "%s() query failed. (%s)",
+				  get_active_function_name(TSRMLS_C), PQresultErrorMessage(pg_result));
+		RETURN_FALSE;
+	}
+	PQclear(pg_result);
+
+	RETURN_TRUE;
 }
 /* }}} */
 
@@ -744,7 +945,51 @@ PHP_FUNCTION(session_pgsql_add_error)
    Returns number of errors and last error message */
 PHP_FUNCTION(session_pgsql_get_error)
 {
+	PGconn *pg_link;
+	PGresult *pg_result;
+	int argc = ZEND_NUM_ARGS();
+	char *id = NULL;
+	size_t id_len = 0;
+	char query[QUERY_BUF_SIZE+1];
+	char *query_select = "SELECT ps_error, ps_warning, ps_notice, ps_err_message  FROM php_session WHERE ps_id = '%s';";
 
+	if (zend_parse_parameters(argc TSRMLS_CC, "|l",
+							  &id, &id_len) == FAILURE) {
+		return;
+	}
+	if (id_len > 32) {
+		php_error(E_NOTICE, "%s() accepts session id string.",
+				  get_active_function_name(TSRMLS_C));
+		RETURN_FALSE;
+	}
+	if (!id)
+		id = PS(id);
+	
+	if (!(pg_link = php_ps_pgsql_get_link(PS(id) TSRMLS_CC))) {
+		php_error(E_WARNING, "%s() cannot find valid connection.",
+				  get_active_function_name(TSRMLS_C));
+		RETURN_FALSE;
+	}
+
+	sprintf(query, query_select, id);
+	pg_result = PQexec(pg_link, query);
+	if (PQresultStatus(pg_result) != PGRES_TUPLES_OK) {
+		PQclear(pg_result);
+		php_error(E_NOTICE, "%s() query failed. %s",
+				  get_active_function_name(TSRMLS_C), PQresultErrorMessage(pg_result));
+		RETURN_FALSE;
+	}
+	if (PQntuples(pg_result) == 0) {
+		PQclear(pg_result);
+		php_error(E_NOTICE, "%s() cannot find session record. %s",
+				  get_active_function_name(TSRMLS_C), PQresultErrorMessage(pg_result));
+		RETURN_FALSE;
+	}
+	array_init(return_value);
+	add_assoc_long(return_value, "Error", atoi(PQgetvalue(pg_result, 0, 0)));
+	add_assoc_long(return_value, "Warning", atoi(PQgetvalue(pg_result, 0, 1)));
+	add_assoc_long(return_value, "Notice", atoi(PQgetvalue(pg_result, 0, 2)));
+	add_assoc_string(return_value, "Error Message", PQgetvalue(pg_result, 0, 3), 1);
 }
 /* }}} */
 
