@@ -4,7 +4,7 @@ PostgreSQL session save handler module README
 This session save handler is EXPERIMENTAL. Anything may be 
 changed/deleted/added without notice.
 
-mod_pgsql is a session save handler module. It provides session strage
+mod_pgsql is a session save handler module. It provides session storage
 with PostgreSQL database. This module is written by yohgaki@php.net. 
 Please report problems to http://bugs.php.net/ or php-dev@lists.php.net.
 
@@ -29,11 +29,20 @@ CREATE TABLE php_session (
 
 CREATE INDEX php_session_idx ON php_session USING BTREE (sess_id);
 
+Application Variable Table Definition
+
+CREATE TABLE php_app_vars (
+  app_modified       integer,
+  app_name           text,
+  app_vars           text
+);
+ 
+
 NOTE: If you use HASH for index, you'll have deadlock problem. DO
 NOT USE HASH INDEX.
 
-User may *append* additional fields, sess_reserved* fields are place
-holder for additional feture. Since mod_pgsql accesses field using
+User may *append* additional fields, sess_reserved fields are place
+holder for additional feature. Since mod_pgsql accesses field using
 field index, user must use this field order.
 
 How to use
@@ -45,15 +54,23 @@ your system must have libpq and headers installed.
 
 Following php.ini directives has special meanings for mod_pgsql
 
-session.save_handler : "pgsql" for mod_pgsql session.
-session.save_path    : Valid PostgreSQL database connection string. 
-                       For example, "host=pgsql dbname=session user=php"
+session.save_handler      : "pgsql" for mod_pgsql session.
+session.pgsql_db          : Valid PostgreSQL database connection string. 
+                            For example, "host=pgsql dbname=session user=php"
+session.pgsql_use_app_var : Use application level variable or not.
+                            Use different session name to change application.
+                            (i.e. use session_name('AppName'))
+session.pgsql_create_table : Automatically create session and application 
+                             variable table.
+session.pgsql_gc_interval : How often perform GC in seconds. Default
+                            is 3600 seconds.
+
 
 How it works
 
 It uses libpq which is written in C. It also uses aync query for
-garbage collection. Therefore, user will not experience deley even if
-barbage collection is performed. This module is much more efficient
+garbage collection. Therefore, user will not experience delay even if
+garbage collection is performed. This module is much more efficient
 than user handlers written in PHP.
 
 How fast pgsql session save handler is
@@ -75,5 +92,11 @@ Known Problem
  - Many.
 
 ToDo
- - Simpile fail over
+ - More efficient application variable handling
+ - Simple fail over
  - Load balancing
+
+History
+ 0.1 is released 2002/1/12
+ 0.2 is released 2002/2/20
+  - Added application variable support.
