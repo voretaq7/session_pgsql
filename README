@@ -18,6 +18,7 @@ provides session storage using PostgreSQL database server(s).
  - Automatic db server load balancing where there are multiple
    PostgreSQL servers.
  - Automatic session table vacuum.
+ - Short circuit UPDATE
 
 It is design to scale any size of web sites.
 
@@ -79,6 +80,13 @@ session_pgsql.create_table
   Automatically create session and application variable table
   if set to on. session_pgsql creates tables, php_session and php_app_vers,
   in the database. Default is on.
+
+session_pgsql.short_circuit
+  If short_circuit is set to on, it will skip UPDATE statement when 
+  skipping is possible. Setting error or custom field value or SESSION
+  array will makde session_pgsql save changes to table, otherwise
+  it will not update table.  Access counter and expire field will not 
+  be updated when update is skipped.
 
 session_pgsql.failover_mode
   If failover_mode is set to on, it will always use 1st db server
