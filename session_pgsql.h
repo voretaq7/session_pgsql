@@ -16,6 +16,8 @@
 
 #ifdef HAVE_SESSION_PGSQL
 
+#define PHP_SESSION_PGSQL_VERSION "0.5.1"
+
 #include <libpq-fe.h>
 #include "ext/session/php_session.h"
 #include "main/SAPI.h"

@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.13 2003/01/17 04:17:20 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.14 2003/01/17 06:22:02 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -155,7 +155,7 @@ zend_module_entry session_pgsql_module_entry = {
 	PHP_MINIT(session_pgsql), PHP_MSHUTDOWN(session_pgsql),
 	PHP_RINIT(session_pgsql), PHP_RSHUTDOWN(session_pgsql),
 	PHP_MINFO(session_pgsql),
-	"0.5.1",
+	PHP_SESSION_PGSQL_VERSION, 
 	STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
@@ -859,7 +859,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 		efree(query);
 		PS_PGSQL(sess_new) = 1;
 	}
-
+iterate
 	now = time(NULL);
 	exp = now + PS(gc_maxlifetime);
 	query_len = key_len;
