@@ -1,5 +1,5 @@
 dnl
-dnl $Id: config.m4,v 1.1 2002/02/17 02:35:54 yohgaki Exp $
+dnl $Id: config.m4,v 1.1.1.1 2002/02/17 02:35:54 yohgaki Exp $
 dnl
 
 PHP_ARG_WITH(session-pgsql,for pgsql sesssion support,
