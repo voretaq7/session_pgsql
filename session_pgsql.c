@@ -16,7 +16,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.4 2002/02/21 10:18:07 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.5 2002/02/21 10:24:49 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -353,7 +353,9 @@ PHP_RSHUTDOWN_FUNCTION(session_pgsql)
 	int ret;
 	
 	ELOG("RSHUTDOWN Called");
-	if (*(ps_pgsql_instance->last_gc) < time(NULL) - PS_PGSQL(gc_interval)) {
+	if (PS(mod) && !strcmp(PS(mod)->name, "pgsql") &&
+		*(ps_pgsql_instance->last_gc) < time(NULL) - PS_PGSQL(gc_interval))
+	{
 		*(ps_pgsql_instance->last_gc) = time(NULL);
 		ret = php_ps_pgsql_gc(TSRMLS_C);
 	}
