@@ -41,6 +41,7 @@ typedef struct _php_session_pgsql_globals {
 	int vacuum_interval;
 	int failover_mode;
 	int disable;
+	int short_circuit;
 
 	PGconn *pgsql_link[MAX_PGSQL_SERVERS];
 	PGconn *current_db;
@@ -49,6 +50,9 @@ typedef struct _php_session_pgsql_globals {
 	int servers; /* better to use prim number. i.e. 2,3,5,7,11... session db servers */
 	int sess_new;
 	int sess_del;
+	int sess_short_circuit;
+	char *sess_val;
+	int sess_vallen;
 	int sess_cnt;
 	int sess_error;
 	int sess_warning;

@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.8 2003/01/17 00:21:49 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.9 2003/01/17 01:26:51 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -112,15 +112,16 @@ static PHP_INI_MH(OnUpdate_session_pgsql_db)
 /* {{{ PHP_INI
  */
 PHP_INI_BEGIN()
-STD_PHP_INI_ENTRY("session.pgsql_disable",       "0",    PHP_INI_SYSTEM, OnUpdateBool, disable, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.disable",       "0",    PHP_INI_SYSTEM, OnUpdateBool, disable, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.db",            "host=localhost dbname=php_session user=nobody", PHP_INI_SYSTEM, OnUpdate_session_pgsql_db, db, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.sem_file_name", PS_DEFAULT_PGSQL_FILE, PHP_INI_SYSTEM, OnUpdateString, sem_file_name, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session.pgsql_create_table",  "1",    PHP_INI_SYSTEM, OnUpdateBool, create_table, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session.pgsql_failover_mode", "0",    PHP_INI_SYSTEM, OnUpdateBool, failover_mode, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session.pgsql_use_app_vars",  "0",    PHP_INI_SYSTEM, OnUpdateBool, use_app_vars, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session.pgsql_serializable",  "0",    PHP_INI_SYSTEM, OnUpdateBool, serializable, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session.pgsql_gc_interval",   "3600", PHP_INI_SYSTEM, OnUpdateInt, gc_interval, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session.pgsql_vacuum_interval", "18000", PHP_INI_SYSTEM, OnUpdateInt, vacuum_interval, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.create_table",  "1",    PHP_INI_SYSTEM, OnUpdateBool, create_table, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.failover_mode", "0",    PHP_INI_SYSTEM, OnUpdateBool, failover_mode, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.short_circuit", "0",    PHP_INI_SYSTEM, OnUpdateBool, short_circuit, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.use_app_vars",  "0",    PHP_INI_SYSTEM, OnUpdateBool, use_app_vars, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.serializable",  "0",    PHP_INI_SYSTEM, OnUpdateBool, serializable, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.gc_interval",   "3600", PHP_INI_SYSTEM, OnUpdateInt, gc_interval, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.vacuum_interval", "18000", PHP_INI_SYSTEM, OnUpdateInt, vacuum_interval, php_session_pgsql_globals, session_pgsql_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -235,6 +236,9 @@ PHP_MSHUTDOWN_FUNCTION(session_pgsql)
 	if (PS_PGSQL(remote_addr)) {
 		free(PS_PGSQL(remote_addr));
 	}
+	if (PS_PGSQL(sess_val)) {
+		free(PS_PGSQL(sess_val));
+	}
 	/* link is closed at shutdown
 	   These values will be initilized */
 	for (i = 0; i < PS_PGSQL(servers); i++) {
@@ -308,6 +312,13 @@ PHP_RINIT_FUNCTION(session_pgsql)
 	else {
 		PS_PGSQL(remote_addr) = strdup("");
 	}
+	/* short circuit option */
+	if (PS_PGSQL(short_circuit)) {
+		PS_PGSQL(sess_short_circuit) = 1;
+	}
+	else {
+		PS_PGSQL(sess_short_circuit) = 0;
+	}
 	return SUCCESS;
 }
 /* }}} */
@@ -352,7 +363,7 @@ static void php_session_pgsql_init_globals(php_session_pgsql_globals *session_pg
 	PS_PGSQL(sess_addr_created)  = NULL;
 	PS_PGSQL(sess_addr_modified) = NULL;
 	PS_PGSQL(remote_addr) = NULL;
-	
+	PS_PGSQL(sess_val) = NULL;
 }
 /* }}} */
 
@@ -883,10 +894,15 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 		snprintf(query, query_len, query_insert,
 				 escaped_key, escaped_sess_name, now, PS_PGSQL(remote_addr), now, exp, escaped_val, buf.c);
 		pg_result = PQexec(PS_PGSQL(current_db), query);
+		PQclear(pg_result);
+		smart_str_free(&buf);
 		efree(escaped_sess_name);
+		efree(query);
+		efree(escaped_key);
+		efree(escaped_val);
 	}
-	else {
-		/* UPDATE */
+	else if (PS_PGSQL(sess_del) || (!PS_PGSQL(sess_short_circuit) && (vallen != PS_PGSQL(sess_vallen) || strncmp(val,PS_PGSQL(sess_val), vallen)))) {
+		/* UPDATE - skip updating if possible */
 		query_len += strlen(query_update);
 		if (PS_PGSQL(sess_custom) && PS_PGSQL(sess_custom)[0]) {
 			smart_str_appends(&buf, ", sess_custom = '");
@@ -909,24 +925,24 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 				 escaped_val, now, PS_PGSQL(remote_addr), exp, PS_PGSQL(sess_cnt),
 				 PS_PGSQL(sess_error), PS_PGSQL(sess_warning), PS_PGSQL(sess_notice), buf.c, escaped_key);
 		pg_result = PQexec(PS_PGSQL(current_db), query);
+		PQclear(pg_result);
+		smart_str_free(&buf);
+		efree(query);
+		efree(escaped_key);
+		efree(escaped_val);
 	}
-	smart_str_free(&buf);
-	PQclear(pg_result);
-	efree(query);
-	efree(escaped_key);
-	efree(escaped_val);
 
 	/* save error message is any */
 	if (PS_PGSQL(sess_error_message)) {
-		char *escaped;
-		int len;
+		char *escaped_error_message;
+		int len, error_message_len;
 		smart_str buf = {0};
 
 		len = strlen(PS_PGSQL(sess_error_message));
-		escaped = (char *)emalloc(len*2+1);
-		len = PQescapeString(escaped, PS_PGSQL(sess_error_message), len);
+		escaped_error_message = (char *)emalloc(len*2+1);
+		error_message_len = PQescapeString(escaped_error_message, PS_PGSQL(sess_error_message), len);
 		smart_str_appends(&buf, "UPDATE php_session SET sess_err_message = '");
-		smart_str_appendl(&buf, escaped, len);
+		smart_str_appendl(&buf, escaped_error_message, error_message_len);
 		smart_str_appendl(&buf, "';", 2);
 		smart_str_0(&buf);
 		
@@ -934,7 +950,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 
 		PQclear(pg_result);
 		smart_str_free(&buf);
-		efree(escaped);
+		efree(escaped_error_message);
 	}
 	pg_result = PQexec(PS_PGSQL(current_db), "END;");
 	if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
@@ -1111,6 +1127,7 @@ PHP_FUNCTION(session_pgsql_status)
 	add_assoc_string(return_value, "Servers", servers, 0);
 	add_assoc_long(return_value, "Number of Servers", PS_PGSQL(servers));
 	add_assoc_long(return_value, "Failover Mode", PS_PGSQL(failover_mode));
+	add_assoc_long(return_value, "Short Circuit", PS_PGSQL(short_circuit));
 	for (i = 0; i < PS_PGSQL(servers); i++) {
 		snprintf(buf, BUF_SIZE, "Server String #%d", i);
 		add_assoc_string(return_value, buf, PS_PGSQL(connstr)[i], 1);
@@ -1203,6 +1220,7 @@ PHP_FUNCTION(session_pgsql_set_field)
 		RETURN_FALSE;
 	}
 
+	PS_PGSQL(sess_short_circuit) = 0; /* force session write */
 	if (PS_PGSQL(sess_custom)) {
 		free(PS_PGSQL(sess_custom));
 	}
@@ -1249,6 +1267,7 @@ PHP_FUNCTION(session_pgsql_add_error)
 		RETURN_FALSE;
 	}
 
+	PS_PGSQL(sess_short_circuit) = 0; /* force session write */
 	switch (error_level) {
 		case E_ERROR:
 		case E_USER_ERROR:
