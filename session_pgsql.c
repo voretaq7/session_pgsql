@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.15 2003/01/17 07:33:17 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.16 2003/01/17 07:44:53 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -606,11 +606,11 @@ static int ps_pgsql_valid_str(const char *key TSRMLS_DC)
 	int ret = 1;
 
 	for (p = key; (c = *p); p++) {
-		/* valid characters are a..z,A..Z,0..9,_ */
+		/* valid characters are a..z, A..Z, 0..9, _-, */
 		if (!((c >= 'a' && c <= 'z') ||
 			  (c >= 'A' && c <= 'Z') ||
 			  (c >= '0' && c <= '9') ||
-			  (c == '_'))) {
+			  (c == '_' || c == '-' || c == ','))) {
 			ret = 0;
 			break;
 		}
