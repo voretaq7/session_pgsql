@@ -1,12 +1,13 @@
 /* 
    +----------------------------------------------------------------------+
    | This source file is subject to LGPL license.	                      |
+   | Copyright (c) Yasuo Ohgaki                                           |
    +----------------------------------------------------------------------+
    | Authors: Yasuo Ohgaki <yohgaki@php.net>							  |
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.6 2003/01/16 07:56:49 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.7 2003/01/16 10:32:39 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -708,10 +709,24 @@ static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC
 	else {
 		pg_result = PQexec(PS_PGSQL(current_db), "BEGIN;");
 	}
-	if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
-		php_error(E_WARNING, "session pgsql: Cannot start transaction. (%s)", PQresultErrorMessage(pg_result));
-	}
 	PQclear(pg_result);
+	if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+		/* try again. server may be rebooted */
+		PQreset(PS_PGSQL(current_db));
+		if (PS_PGSQL(serializable)) {
+			pg_result = PQexec(PS_PGSQL(current_db), "BEGIN; SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;");
+		}
+		else {
+			pg_result = PQexec(PS_PGSQL(current_db), "BEGIN;");
+		}
+		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+			php_error(E_WARNING, "session pgsql: Cannot start transaction. (%s)", PQresultErrorMessage(pg_result));
+			PQclear(pg_result);
+			return FAILURE;
+		}
+		PQclear(pg_result);
+	}
+
 
 	PS_PGSQL(sess_new) = 0;
 	PS_PGSQL(sess_del) = 0;
