@@ -1,0 +1,79 @@
+PostgreSQL session save handler module README
+
+*WARNING*
+This session save handler is EXPERIMENTAL. Anything may be 
+changed/deleted/added without notice.
+
+mod_pgsql is a session save handler module. It provides session strage
+with PostgreSQL database. This module is written by yohgaki@php.net. 
+Please report problems to http://bugs.php.net/ or php-dev@lists.php.net.
+
+Session Table Definition
+
+CREATE TABLE php_session (
+  sess_id            char(32),
+  sess_name          char(32),
+  sess_data          text,
+  sess_created       integer,
+  sess_modified      integer,
+  sess_expire        integer,
+  sess_addr_created  cidr,
+  sess_addr_modified cidr,
+  sess_error         integer,
+  sess_warning       integer,
+  sess_notice        integer,
+  sess_err_message   text,
+  sess_counter       integer,
+  sess_reserved      integer
+);
+
+CREATE INDEX php_session_idx ON php_session USING BTREE (sess_id);
+
+NOTE: If you use HASH for index, you'll have deadlock problem. DO
+NOT USE HASH INDEX.
+
+User may *append* additional fields, sess_reserved* fields are place
+holder for additional feture. Since mod_pgsql accesses field using
+field index, user must use this field order.
+
+How to use
+
+To compile PHP with mod_pgsql, you need "--with-session-pgsql[=DIR]"
+when you configure PHP. [=DIR] is installation path for
+PostgreSQL. You don't have to compile PHP with PostgreSQL module, but
+your system must have libpq and headers installed.
+
+Following php.ini directives has special meanings for mod_pgsql
+
+session.save_handler : "pgsql" for mod_pgsql session.
+session.save_path    : Valid PostgreSQL database connection string. 
+                       For example, "host=pgsql dbname=session user=php"
+
+How it works
+
+It uses libpq which is written in C. It also uses aync query for
+garbage collection. Therefore, user will not experience deley even if
+barbage collection is performed. This module is much more efficient
+than user handlers written in PHP.
+
+How fast pgsql session save handler is
+
+Here is summary of simple benchmark tests. This module is as fast as
+files session save handler on my test system. I also compared with
+equivalent user save handler with PostgreSQL database. This module is
+2 times faster than PHP script version.  msession handler is about 30%
+faster than pgsql save handler. mm handler does not work for me :(
+
+How to customize
+
+Since mod_pgsql uses PostgreSQL database. User can add more fields to
+session database and create session access functions as user
+want. Keep in mind that user is not supposed to order of standard
+fields. User fields are must be defined after mod_pgsql fields.
+
+Known Problem
+ - Many.
+
+ToDo
+ - Simpile fail over
+ - Load balancing
