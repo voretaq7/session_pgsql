@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.25 2003/01/18 05:13:47 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.26 2003/01/18 09:45:54 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -311,6 +311,7 @@ PHP_RINIT_FUNCTION(session_pgsql)
 	else {
 		PS_PGSQL(remote_addr) = strdup("");
 	}
+	PS_PGSQL(current_db) = NULL;
 	return SUCCESS;
 }
 /* }}} */
@@ -1157,6 +1158,10 @@ PHP_FUNCTION(session_pgsql_status)
 		php_error(E_WARNING, "session_pgsql is disabled");
 		RETURN_FALSE;
 	}
+	if (!PS_PGSQL(current_db)) {
+		php_error(E_NOTICE, "session_pgsql has no database connection");
+		RETURN_FALSE;
+	}
 
 	array_init(return_value);
 	servers = safe_estrdup(PS_PGSQL(db));
@@ -1207,6 +1212,9 @@ PHP_FUNCTION(session_pgsql_info)
 		php_error(E_WARNING, "session_pgsql is disabled");
 		RETURN_FALSE;
 	}
+	if (!PS_PGSQL(current_db)) {
+		php_error(E_NOTICE, "session_pgsql has no database connection");
+	}
 
 	array_init(return_value);
 	add_assoc_string(return_value, "Session ID", PS(id), 1);
@@ -1256,6 +1264,10 @@ PHP_FUNCTION(session_pgsql_set_field)
 		php_error(E_WARNING, "session_pgsql is disabled");
 		RETURN_FALSE;
 	}
+	if (!PS_PGSQL(current_db)) {
+		php_error(E_NOTICE, "session_pgsql has no database connection");
+		RETURN_FALSE;
+	}
 
 	PS_PGSQL(sess_short_circuit) = 0; /* force session write */
 	if (PS_PGSQL(sess_custom)) {
@@ -1277,6 +1289,10 @@ PHP_FUNCTION(session_pgsql_get_field)
 	}
 	if (PS_PGSQL(disable)) {
 		php_error(E_WARNING, "session_pgsql is disabled");
+		RETURN_FALSE;
+	}
+	if (!PS_PGSQL(current_db)) {
+		php_error(E_NOTICE, "session_pgsql has no database connection");
 		RETURN_FALSE;
 	}
 
@@ -1301,6 +1317,10 @@ PHP_FUNCTION(session_pgsql_add_error)
 
 	if (PS_PGSQL(disable)) {
 		php_error(E_WARNING, "session_pgsql is disabled");
+		RETURN_FALSE;
+	}
+	if (!PS_PGSQL(current_db)) {
+		php_error(E_NOTICE, "session_pgsql has no database connection");
 		RETURN_FALSE;
 	}
 
@@ -1348,12 +1368,15 @@ PHP_FUNCTION(session_pgsql_get_error)
 		php_error(E_WARNING, "session_pgsql is disabled");
 		RETURN_FALSE;
 	}
+	if (!PS_PGSQL(current_db)) {
+		php_error(E_NOTICE, "session_pgsql has no database connection");
+		RETURN_FALSE;
+	}
 
 	array_init(return_value);
 	add_assoc_long(return_value, "Errors",   PS_PGSQL(sess_error));
 	add_assoc_long(return_value, "Warnings", PS_PGSQL(sess_warning));
 	add_assoc_long(return_value, "Notices",  PS_PGSQL(sess_notice));
-
 	if (with_error_message) {
 		PGresult *pg_result;
 		smart_str buf= {0};
