@@ -230,9 +230,7 @@ NOTE: If you use HASH for index, you'll have deadlock problem when
 server load *very* high. Even if it's unlikely to have deadlock under 
 normal operation, but it can. DO NOT USE HASH INDEX.
 
-User may *append* additional fields, sess_reserved fields are place
-holder for additional feature. Since mod_pgsql accesses field using
-field index, user must use this field order.
+User may change session table as long as all fields are defined.
 
 [ToDo]
  - More efficient application variable handling
@@ -240,6 +238,9 @@ field index, user must use this field order.
 [History]
  1.0.0 - 2003/?/??
   - Stable release.
+
+ 0.6.1 - 2003/1/19
+  - Stable release candidate.
 
  0.6.0 - 2003/1/18
   - Stable release candidate.
