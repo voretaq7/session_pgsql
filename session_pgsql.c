@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.22 2003/01/18 02:05:06 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.23 2003/01/18 02:15:38 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -913,8 +913,6 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		smart_str_free(&buf);
 		efree(escaped_sess_name);
 		efree(query);
-		efree(escaped_key);
-		efree(escaped_val);
 	}
 	else if (!PS_PGSQL(sess_short_circuit) || vallen != PS_PGSQL(sess_vallen) || strncmp(val, PS_PGSQL(sess_val), PS_PGSQL(sess_vallen))) {
 		/* UPDATE - skip updating if possible */
@@ -943,9 +941,9 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		PQclear(pg_result);
 		smart_str_free(&buf);
 		efree(query);
-		efree(escaped_key);
-		efree(escaped_val);
 	}
+	efree(escaped_key);
+	efree(escaped_val);
 
 	/* save error message is any */
 	if (PS_PGSQL(sess_error_message)) {
