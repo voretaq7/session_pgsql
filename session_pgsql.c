@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.18 2003/01/17 23:08:19 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.19 2003/01/18 00:34:56 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -627,13 +627,20 @@ static int ps_pgsql_valid_str(const char *key TSRMLS_DC)
  */
 static int ps_pgsql_app_read(TSRMLS_D) 
 {
-	PGconn *pg_link = PS_PGSQL(current_db);
-	PGresult *pg_result;
-	char query[QUERY_BUF_SIZE+1];
 	int ret = SUCCESS;
-	
+
 	if (PS_PGSQL(use_app_vars)) {
-		snprintf(query, QUERY_BUF_SIZE, "SELECT app_vars FROM php_app_vars WHERE app_name = '%s';", PS(session_name));
+		PGconn *pg_link = PS_PGSQL(current_db);
+		PGresult *pg_result;
+		char query[QUERY_BUF_SIZE+1];
+		char *escaped_session_name;
+		int len, session_name_len;
+		
+		len = strlen(PS(session_name));
+		escaped_session_name = emalloc(len*2 + 1);
+		session_name_len = PQescapeString(escaped_session_name, PS(session_name), len);
+		snprintf(query, QUERY_BUF_SIZE, "SELECT app_vars FROM php_app_vars WHERE app_name = '%s';", escaped_session_name);
+		efree(escaped_session_name);
 		pg_result = PQexec(pg_link, query);
 		MAKE_STD_ZVAL(PS_PGSQL(app_vars));				
 		if (PQresultStatus(pg_result) == PGRES_TUPLES_OK) {
