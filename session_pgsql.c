@@ -16,7 +16,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.3 2002/02/21 06:39:48 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.4 2002/02/21 10:18:07 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -31,6 +31,7 @@
 #include "ext/standard/php_string.h"
 #include "ext/standard/php_var.h"
 #include "ext/standard/php_smart_str.h"
+#include "SAPI.h"
 
 #ifdef HAVE_SESSION_PGSQL
 #include "mm.h"
@@ -44,7 +45,7 @@ ps_module ps_mod_pgsql = {
   	PS_MOD(pgsql)
 };
 
-#define PS_PGSQL_FILE "/tmp/session_pgsql"
+#define PS_PGSQL_MM_FILE "/tmp/session_pgsql_"
 
 typedef struct {
 	MM *mm;
@@ -109,7 +110,7 @@ STD_PHP_INI_ENTRY("session.pgsql_use_app_vars",    "1",    PHP_INI_SYSTEM, OnUpd
 STD_PHP_INI_ENTRY("session.pgsql_failover",    "0",    PHP_INI_SYSTEM, OnUpdate_session_pgsql_failover, failover,     php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session.pgsql_loadbalance", "0",    PHP_INI_SYSTEM, OnUpdate_session_pgsql_loadbalance, loadbalance,  php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session.pgsql_serializable","0",    PHP_INI_ALL, OnUpdateBool, serializable, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session.pgsql_create_table","0",    PHP_INI_ALL, OnUpdateBool, create_table, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session.pgsql_create_table","1",    PHP_INI_ALL, OnUpdateBool, create_table, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session.pgsql_gc_interval", "3600", PHP_INI_ALL, OnUpdateInt, gc_interval, php_session_pgsql_globals, session_pgsql_globals)
 PHP_INI_END()
 /* }}} */
@@ -279,6 +280,8 @@ static int php_ps_pgsql_gc(TSRMLS_D)
  */
 PHP_MINIT_FUNCTION(session_pgsql)
 {
+	char *mm_pathname;
+	char euid[30];
 #ifdef ZTS
 	php_session_pgsql_globals *session_pgsql_globals;
 	ts_allocate_id(&session_pgsql_globals_id, sizeof(php_session_pgsql_globals), NULL, NULL);
@@ -291,8 +294,19 @@ PHP_MINIT_FUNCTION(session_pgsql)
 	if (!ps_pgsql_instance) {
 		return FAILURE;
 	}
+	if (!sprintf(euid,"%d", geteuid())) 
+		return FAILURE;
+
+	mm_pathname = emalloc(strlen(PS_PGSQL_MM_FILE)+strlen(sapi_module.name)+strlen(euid)+1);
+	mm_pathname[0] = '\0';
+	strcat(mm_pathname, PS_PGSQL_MM_FILE);
+	strcat(mm_pathname, sapi_module.name);
+	strcat(mm_pathname, euid);
 	ps_pgsql_instance->owner = getpid();
-	ps_pgsql_instance->mm = mm_create(0, PS_PGSQL_FILE);
+	ps_pgsql_instance->mm = mm_create(0, mm_pathname);
+	efree(mm_pathname);
+
+	
 	if (!ps_pgsql_instance->mm) {
 		return FAILURE;
 	}
@@ -913,7 +927,7 @@ PHP_FUNCTION(session_pgsql_add_error)
 			RETURN_FALSE;
 	}
 		
-	if (argc = 1) {
+	if (argc == 1) {
 		if (err_msg_len > 400) {
 			php_error(E_NOTICE, "%s() error message is too long and trancated (Max 400 bytes)",
 					  get_active_function_name(TSRMLS_C));
