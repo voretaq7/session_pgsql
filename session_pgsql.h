@@ -40,10 +40,12 @@ PS_FUNCS(pgsql);
 
 typedef struct _php_session_pgsql_globals {
 	char *db;
+	int create_table;
 	int failover;
 	int loadbalance;
 	int serializable;
-	int create_table;
+	int use_app_vars;
+
 	PGconn *pgsql_link[MAX_PGSQL_SERVERS];
 	char *connstr[MAX_PGSQL_SERVERS];
 	int table_exist[MAX_PGSQL_SERVERS];
@@ -51,11 +53,14 @@ typedef struct _php_session_pgsql_globals {
 	int sess_new;
 	int sess_del;
 	int sess_cnt;
-	/* FIXME: gc related vars must be shared mem :) */
 	int gc_interval;
 	time_t last_gc;
 	int maxlifetime;
 	int failovered;
+	int app_modified;
+	int app_new;
+
+	zval *app_vars;
 } php_session_pgsql_globals; 
 
 /* php function registration */
