@@ -35,6 +35,7 @@ PS_FUNCS(pgsql);
 #define PS_DEFAULT_PGSQL_FILE "/tmp/php_session_pgsql"
 
 typedef struct _php_session_pgsql_globals {
+	/* php.ini vars */
 	char *db;
 	int create_table;
 	int serializable;
@@ -47,10 +48,12 @@ typedef struct _php_session_pgsql_globals {
 	int short_circuit;
 	int keep_expired;
 
+	/* internal globals */
 	PGconn *pgsql_link[MAX_PGSQL_SERVERS];
 	PGconn *current_db;
 	int current_id;
 	char *connstr[MAX_PGSQL_SERVERS]; /* malloc/free should be used */
+	char *remote_addr; /* malloc/free should be used */
 	int servers; /* better to use prim number. i.e. 2,3,5,7,11... session db servers */
 	int sess_new;
 	int sess_del;
@@ -66,14 +69,11 @@ typedef struct _php_session_pgsql_globals {
 	int sess_expire;
 	char *sess_custom; /* malloc/free should be used */
 	char *sess_error_message; /* malloc/free should be used */
-	char *sess_addr_created; /* malloc/free should be used */
+	char *sess_addr_created;  /* malloc/free should be used */
 	char *sess_addr_modified; /* malloc/free should be used */
-	char *remote_addr; /* malloc/free should be used */
-	int maxlifetime;
 	
 	int app_modified;
 	int app_new;
-
 	zval *app_vars;
 } php_session_pgsql_globals; 
 
