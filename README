@@ -86,7 +86,7 @@ and PostgreSQL to localhost. All you have to do is (as postgres super user)
 In your php.ini
 session.save_handler = pgsql
 or
-In your script (make sure you call it *first* and before staring session)
+In your script (make sure you call it *before* staring session)
 session_module_name('pgsql');
 
 session_pgsql connects to local PostgreSQL backend and create session
@@ -120,7 +120,9 @@ session_pgsql.db
   db server loads. If one of session db server fails, it will try to
   use available db server automatically.
   NOTE: database name must be "php_session". Other connection options
-  may be changed.
+        may be changed.
+  NOTE: If you have multiple web/db servers, make sure session_pgsql.db
+        is the same value for all web servers.
   Default is "host=localhost dbname=php_session user=nobody"
 
 session_pgsql.keep_expired
@@ -166,6 +168,7 @@ session_pgsql.gc_interval
   It is good idea set to 0 (disable) and perform garbage collection
   by using cron or like in db server if you have multiple web servers
   accessed to the session db server(s).
+  NOTE: It's good idea performing garbage collection using cron or like.
   Default is 3600 seconds (1 hour).
 
 session_pgsql.vacuum_interval
@@ -175,6 +178,7 @@ session_pgsql.vacuum_interval
   It is good idea set to 0 (disable) and perform vacuum
   by using cron or like in db server if you have multiple web servers
   accessed to the session db server(s).
+  NOTE: It's good idea performing vaccum and reindex using cron or like.
   Default is 21600 seconds (6 hours).
 
 [Module Functions]
