@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.9 2003/01/17 01:26:51 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.10 2003/01/17 01:30:27 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -154,7 +154,7 @@ zend_module_entry session_pgsql_module_entry = {
 	PHP_MINIT(session_pgsql), PHP_MSHUTDOWN(session_pgsql),
 	PHP_RINIT(session_pgsql), PHP_RSHUTDOWN(session_pgsql),
 	PHP_MINFO(session_pgsql),
-	"0.4.1",
+	"0.5.0",
 	STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
