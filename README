@@ -172,7 +172,7 @@ session_pgsql.vacuum_interval
   It is good idea set to 0 (disable) and perform vacuum
   by using cron or like in db server if you have multiple web servers
   accessed to the session db server(s).
-  Default is 18000 seconds (5 hours).
+  Default is 21600 seconds (6 hours).
 
 [Module Functions]
 /* {{{ proto array session_pgsql_status(void)
@@ -235,7 +235,7 @@ field index, user must use this field order.
  - More efficient application variable handling
 
 [History]
- 1.0.0 - ????/?/??
+ 1.0.0 - 2003/?/??
   - Stable release.
 
  0.6.0 - 2003/1/18
