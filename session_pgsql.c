@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.10 2003/01/17 01:30:27 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.11 2003/01/17 03:13:04 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -236,9 +236,6 @@ PHP_MSHUTDOWN_FUNCTION(session_pgsql)
 	if (PS_PGSQL(remote_addr)) {
 		free(PS_PGSQL(remote_addr));
 	}
-	if (PS_PGSQL(sess_val)) {
-		free(PS_PGSQL(sess_val));
-	}
 	/* link is closed at shutdown
 	   These values will be initilized */
 	for (i = 0; i < PS_PGSQL(servers); i++) {
@@ -311,13 +308,6 @@ PHP_RINIT_FUNCTION(session_pgsql)
 	}
 	else {
 		PS_PGSQL(remote_addr) = strdup("");
-	}
-	/* short circuit option */
-	if (PS_PGSQL(short_circuit)) {
-		PS_PGSQL(sess_short_circuit) = 1;
-	}
-	else {
-		PS_PGSQL(sess_short_circuit) = 0;
 	}
 	return SUCCESS;
 }
@@ -780,7 +770,6 @@ static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC
 				exp = (time_t)atoi(expire);
 				if ((exp < time(NULL))) {
 					/* expired. delete and create */
-					PS_PGSQL(sess_new) = 1;
 					PS_PGSQL(sess_del) = 1;
 				}
 				else {
@@ -811,17 +800,26 @@ static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC
 		}
 		else {
 			/* something wrong, but try to delete and insert data anyway */
-			PS_PGSQL(sess_new) = 1;
 			PS_PGSQL(sess_del) = 1;
 			ret = SUCCESS;
 		}
 		PQclear(pg_result);	
 	}
 	else {
+		PS_PGSQL(sess_new) = 1;
 		php_error(E_NOTICE,"session pgsql: Invalid Session ID detected");
 	}
 	if (*vallen == 0) {
-		*val = safe_estrndup("",0);
+		*val = empty_string;
+	}
+	/* save values for short circuit */
+	if (PS_PGSQL(sess_new)) {
+		PS_PGSQL(sess_vallen) = 0;
+		PS_PGSQL(sess_val) = empty_string;
+	}
+	else {
+		PS_PGSQL(sess_vallen) = *vallen;
+		PS_PGSQL(sess_val) = estrndup(*val, *vallen);
 	}
 
 	return ret;
@@ -858,6 +856,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 		pg_result = PQexec(PS_PGSQL(current_db), query);
 		PQclear(pg_result);
 		efree(query);
+		PS_PGSQL(sess_new) = 1;
 	}
 
 	now = time(NULL);
@@ -901,7 +900,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 		efree(escaped_key);
 		efree(escaped_val);
 	}
-	else if (PS_PGSQL(sess_del) || (!PS_PGSQL(sess_short_circuit) && (vallen != PS_PGSQL(sess_vallen) || strncmp(val,PS_PGSQL(sess_val), vallen)))) {
+	else if (!PS_PGSQL(sess_short_circuit) || vallen != PS_PGSQL(sess_vallen) || strncmp(val, PS_PGSQL(sess_val), PS_PGSQL(sess_vallen))) {
 		/* UPDATE - skip updating if possible */
 		query_len += strlen(query_update);
 		if (PS_PGSQL(sess_custom) && PS_PGSQL(sess_custom)[0]) {
@@ -1006,8 +1005,15 @@ static int ps_pgsql_sess_gc(TSRMLS_D)
 PS_OPEN_FUNC(pgsql)
 {
 	ELOG("OPEN CALLED");
-	*mod_data = (void *)1; /* mod_data cannot be NULL to make session save handler module work */
-
+	/* mod_data cannot be NULL to make session save handler module work */
+	*mod_data = (void *)1; 
+	/* short circuit option */
+	if (PS_PGSQL(short_circuit)) {
+		PS_PGSQL(sess_short_circuit) = 1;
+	}
+	else {
+		PS_PGSQL(sess_short_circuit) = 0;
+	}
 	return SUCCESS;
 }
 /* }}} */
@@ -1020,6 +1026,11 @@ PS_CLOSE_FUNC(pgsql)
 	ELOG("CLOSE Called");
 	*mod_data = (void *)0; /* mod_data should be set to NULL to avoid additional close call */
 
+	if (PS_PGSQL(sess_val)) {
+		efree(PS_PGSQL(sess_val));
+	}
+	PS_PGSQL(sess_vallen) = 0;
+	PS_PGSQL(sess_val) = NULL;
 	/* GC is done here for better response when GC is performed */
 	ps_pgsql_sess_gc(TSRMLS_C);
 	return SUCCESS;
