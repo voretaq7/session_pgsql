@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.19 2003/01/18 00:34:56 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.20 2003/01/18 02:01:18 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -64,8 +64,8 @@ static PGconn *php_ps_pgsql_get_db(const char *key TSRMLS_DC);
 
 static int ps_pgsql_app_read(TSRMLS_D);
 static int ps_pgsql_app_write(TSRMLS_D);
-static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC);
-static int ps_pgsql_sess_write(const char *key, const char *val, const int vallen TSRMLS_DC);
+static int ps_pgsql_sess_read(const char *key, char **val, size_t *vallen TSRMLS_DC);
+static int ps_pgsql_sess_write(const char *key, const char *val, const size_t vallen TSRMLS_DC);
 static int ps_pgsql_sess_gc(TSRMLS_D);
 
 #define PS_PGSQL_DATA ps_pgsql *data = PS_GET_MOD_DATA()
@@ -549,8 +549,8 @@ static PGconn *php_ps_pgsql_get_db(const char *key TSRMLS_DC)
 {
 	PGconn *db = NULL;
 	div_t tmp;
-	int i, sum = 0;
-	int len, id = 0;
+	int i, sum = 0, id = 0;
+	size_t len;
 	
 	if (PS_PGSQL(servers) == 1) {
 		db = php_ps_pgsql_connect(0 TSRMLS_CC);
@@ -634,7 +634,7 @@ static int ps_pgsql_app_read(TSRMLS_D)
 		PGresult *pg_result;
 		char query[QUERY_BUF_SIZE+1];
 		char *escaped_session_name;
-		int len, session_name_len;
+		size_t len, session_name_len;
 		
 		len = strlen(PS(session_name));
 		escaped_session_name = emalloc(len*2 + 1);
@@ -725,7 +725,7 @@ static int ps_pgsql_app_write(TSRMLS_D)
 
 /* {{{ ps_pgsql_sess_read
  */
-static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC) 
+static int ps_pgsql_sess_read(const char *key, char **val, size_t *vallen TSRMLS_DC) 
 {
 	PGresult *pg_result;
 /* 	ExecStatusType pg_status; */
@@ -844,7 +844,7 @@ static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC
 
 /* {{{ ps_pgsql_sess_write
  */
-static int ps_pgsql_sess_write(const char *key, const char *val, const int vallen TSRMLS_DC) 
+static int ps_pgsql_sess_write(const char *key, const char *val, const size_t vallen TSRMLS_DC) 
 {
 	PGresult *pg_result;
 	size_t query_len;
@@ -883,7 +883,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 	query_len += strlen(PS_PGSQL(remote_addr));		
 	if (PS_PGSQL(sess_new)) {
 		char *escaped_sess_name;
-		int name_len;
+		size_t name_len;
 		/* INSERT */
 		query_len += strlen(query_insert);
 		if (PS_PGSQL(sess_custom) && PS_PGSQL(sess_custom)[0]) {
@@ -950,7 +950,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 	/* save error message is any */
 	if (PS_PGSQL(sess_error_message)) {
 		char *escaped_error_message;
-		int len, error_message_len;
+		size_t len, error_message_len;
 		smart_str buf = {0};
 
 		len = strlen(PS_PGSQL(sess_error_message));
@@ -1356,7 +1356,7 @@ PHP_FUNCTION(session_pgsql_get_error)
 		PGresult *pg_result;
 		smart_str buf= {0};
 		char *escaped;
-		int len;
+		size_t len;
 
 		if (PS_PGSQL(sess_error_message)) {
 			add_assoc_string(return_value, "Error Message", PS_PGSQL(sess_error_message), 1);
