@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.26 2003/01/18 09:45:54 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.27 2003/03/17 00:59:16 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -1107,7 +1107,10 @@ PS_DESTROY_FUNC(pgsql)
 	PGresult *pg_result;
 	size_t query_len;
 	char *query;
-	char *query_update = "DELETE FROM php_session WHERE sess_id = '%s';";
+	/* session module calls PS(mod)->close, request shutdown then request init function.
+	   Transaction should be ended here. (session_pgsql don't use session read/write for
+	   better performance */
+	char *query_update = "DELETE FROM php_session WHERE sess_id = '%s';END;";
 	int ret = FAILURE;
 
 	ELOG("DESTROY Called");
@@ -1120,7 +1123,7 @@ PS_DESTROY_FUNC(pgsql)
 		query = (char *)emalloc(query_len+1);
 		snprintf(query, query_len, query_update, key);
 		pg_result = PQexec(PS_PGSQL(current_db), query);
-		if (PQresultStatus(pg_result) == PGRES_TUPLES_OK) {
+		if (PQresultStatus(pg_result) == PGRES_COMMAND_OK) {
 			ret = SUCCESS;
 		}
 		PQclear(pg_result);
