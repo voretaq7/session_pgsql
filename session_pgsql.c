@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.16 2003/01/17 07:44:53 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.17 2003/01/17 10:11:02 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -1148,6 +1148,7 @@ PHP_FUNCTION(session_pgsql_status)
 	add_assoc_long(return_value, "Number of Servers", PS_PGSQL(servers));
 	add_assoc_long(return_value, "Failover Mode", PS_PGSQL(failover_mode));
 	add_assoc_long(return_value, "Short Circuit", PS_PGSQL(short_circuit));
+	add_assoc_long(return_value, "Keep Expired", PS_PGSQL(keep_expired));
 	for (i = 0; i < PS_PGSQL(servers); i++) {
 		snprintf(buf, BUF_SIZE, "Server String #%d", i);
 		add_assoc_string(return_value, buf, PS_PGSQL(connstr)[i], 1);
