@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.24 2003/01/18 02:34:04 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.25 2003/01/18 05:13:47 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -858,13 +858,15 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 	char *query_update =
 	   "UPDATE php_session SET sess_data = '%s', sess_modified = %d, sess_addr_modified = '%s', sess_expire = %d , sess_counter = %d, sess_error = %d, sess_warning = %d , sess_notice = %d %s"
 	   "WHERE sess_id = '%s';";
-	char *escaped_key, *escaped_val, *escaped_custom;
+	char *escaped_val, *escaped_custom;
 	smart_str buf= {0};
  	size_t custom_len, key_len;
 
+	if (!ps_pgsql_valid_str(key TSRMLS_CC)) {
+		return FAILURE;
+	}
+	
 	key_len = strlen(key);
-	escaped_key = (char *)emalloc(key_len*2+1);
-	key_len = PQescapeString(escaped_key, key, key_len);
 	if (PS_PGSQL(sess_del) && !PS_PGSQL(keep_expired)) {
 		query_len = strlen(query_delete) + key_len;
 		query = emalloc(query_len+1);
@@ -907,7 +909,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		query_len += 32*3; /* 32 bytes for an int should be enough */ 
 		query = emalloc(query_len+1);
 		snprintf(query, query_len, query_insert,
-				 escaped_key, escaped_sess_name, now, PS_PGSQL(remote_addr), now, exp, escaped_val, buf.c);
+				 key, escaped_sess_name, now, PS_PGSQL(remote_addr), now, exp, escaped_val, buf.c);
 		pg_result = PQexec(PS_PGSQL(current_db), query);
 		PQclear(pg_result);
 		smart_str_free(&buf);
@@ -936,7 +938,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		query = emalloc(query_len+1);
 		snprintf(query, query_len, query_update,
 				 escaped_val, now, PS_PGSQL(remote_addr), exp, PS_PGSQL(sess_cnt),
-				 PS_PGSQL(sess_error), PS_PGSQL(sess_warning), PS_PGSQL(sess_notice), buf.c, escaped_key);
+				 PS_PGSQL(sess_error), PS_PGSQL(sess_warning), PS_PGSQL(sess_notice), buf.c, key);
 		pg_result = PQexec(PS_PGSQL(current_db), query);
 		PQclear(pg_result);
 		smart_str_free(&buf);
@@ -955,7 +957,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		smart_str_appends(&buf, "UPDATE php_session SET sess_err_message = '");
 		smart_str_appendl(&buf, escaped_error_message, error_message_len);
 		smart_str_appends(&buf, "' WHERE sess_id='");
-		smart_str_appends(&buf, escaped_key);
+		smart_str_appends(&buf, key);
 		smart_str_appendl(&buf, "';", 2);
 		smart_str_0(&buf);
 		
@@ -965,7 +967,6 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		smart_str_free(&buf);
 		efree(escaped_error_message);
 	}
-	efree(escaped_key);
 	efree(escaped_val);
 	
 	pg_result = PQexec(PS_PGSQL(current_db), "END;");
