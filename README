@@ -235,6 +235,9 @@ field index, user must use this field order.
  - More efficient application variable handling
 
 [History]
+ 1.0.0 - ????/?/??
+  - Stable release.
+
  0.6.0 - 2003/1/18
   - Stable release candidate.
 
