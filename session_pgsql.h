@@ -45,6 +45,7 @@ typedef struct _php_session_pgsql_globals {
 	int failover_mode;
 	int disable;
 	int short_circuit;
+	int keep_expired;
 
 	PGconn *pgsql_link[MAX_PGSQL_SERVERS];
 	PGconn *current_db;

@@ -7,7 +7,7 @@
    +----------------------------------------------------------------------+
  */
 
-/* $Id: session_pgsql.c,v 1.14 2003/01/17 06:22:02 yohgaki Exp $ */
+/* $Id: session_pgsql.c,v 1.15 2003/01/17 07:33:17 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -119,6 +119,7 @@ STD_PHP_INI_ENTRY("session_pgsql.sem_file_name", PS_DEFAULT_PGSQL_FILE, PHP_INI_
 STD_PHP_INI_ENTRY("session_pgsql.create_table",  "1",    PHP_INI_SYSTEM, OnUpdateBool, create_table, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.failover_mode", "0",    PHP_INI_SYSTEM, OnUpdateBool, failover_mode, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.short_circuit", "0",    PHP_INI_SYSTEM, OnUpdateBool, short_circuit, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.keep_expired",  "0",    PHP_INI_SYSTEM, OnUpdateBool, keep_expired, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.use_app_vars",  "0",    PHP_INI_SYSTEM, OnUpdateBool, use_app_vars, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.serializable",  "0",    PHP_INI_SYSTEM, OnUpdateBool, serializable, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.gc_interval",   "3600", PHP_INI_SYSTEM, OnUpdateInt, gc_interval, php_session_pgsql_globals, session_pgsql_globals)
@@ -765,11 +766,11 @@ static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC
 			else {
 				/* session data exists */
 				char *expire;
-				time_t exp;
+				time_t exp, now = time(NULL);
 					
 				expire = PQgetvalue(pg_result, 0, 0);
 				exp = (time_t)atoi(expire);
-				if ((exp < time(NULL))) {
+				if ((exp < now) && !PS_PGSQL(keep_expired)) {
 					/* expired. delete and create */
 					PS_PGSQL(sess_del) = 1;
 				}
@@ -783,10 +784,17 @@ static int ps_pgsql_sess_read(const char *key, char **val, int *vallen TSRMLS_DC
 					PS_PGSQL(sess_error)   = (int)atoi(PQgetvalue(pg_result, 0, 2));
 					PS_PGSQL(sess_warning) = (int)atoi(PQgetvalue(pg_result, 0, 3));
 					PS_PGSQL(sess_notice)  = (int)atoi(PQgetvalue(pg_result, 0, 4));
-					/* session data - PQgetvalue reuturns "" for NULL */
-					tmp = PQgetvalue(pg_result, 0, 5);
-					*vallen = strlen(tmp);
-					*val = estrndup(tmp, *vallen);
+					if (exp < now) {
+						*vallen = 0;
+						*val = empty_string;
+						PS_PGSQL(short_circuit) = 0; /* disable short circuit */
+					}
+					else {
+						/* session data - PQgetvalue reuturns "" for NULL */
+						tmp = PQgetvalue(pg_result, 0, 5);
+						*vallen = strlen(tmp);
+						*val = estrndup(tmp, *vallen);
+					}
 					/* custom field */
 					tmp = PQgetvalue(pg_result, 0, 6);
 					PS_PGSQL(sess_custom) = strdup(tmp);
@@ -850,7 +858,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 	key_len = strlen(key);
 	escaped_key = (char *)emalloc(key_len*2+1);
 	key_len = PQescapeString(escaped_key, key, key_len);
-	if (PS_PGSQL(sess_del)) {
+	if (PS_PGSQL(sess_del) && !PS_PGSQL(keep_expired)) {
 		query_len = strlen(query_delete) + key_len;
 		query = emalloc(query_len+1);
 		snprintf(query, query_len, query_delete, key);
@@ -859,7 +867,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const int valle
 		efree(query);
 		PS_PGSQL(sess_new) = 1;
 	}
-iterate
+
 	now = time(NULL);
 	exp = now + PS(gc_maxlifetime);
 	query_len = key_len;
