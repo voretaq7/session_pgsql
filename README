@@ -54,8 +54,12 @@ NOTE: It cannot be used with CGI/CLI binary or dl() or loading from .htaccess.
 
 Following php.ini directives has special meanings for mod_pgsql
 
-session.save_handler     
+session.save_handler
   "pgsql" for session_pgsql session.
+
+session.*
+  save_path is ignored. Other session.* settings are also used for
+  session_pgsql.
 
 session_pgsql.db          
   Valid PostgreSQL database connection string. 
@@ -68,13 +72,20 @@ session_pgsql.db
   use available db server automatically.
   NOTE: database name must be "php_session". Other connection options
   may be changed.
+  Default is "host=localhost dbname=php_session user=nobody"
+
+session_pgsql.keep_expired
+  Keep expired data except session values. Counter, created time, created
+  IP address, etc is kept when this is set to on. If this option is off
+  session record is deleted and insert record is created. 
+  Default is off. 
 
 session_pgsql.use_app_vars 
   Use application level variable ($_APP) or not.
   Use different session name to change application.
   i.e. use session_name('AppName')
   Use of application variable has severe performance penalty.
-  Default is off  
+  Default is off.
 
 session_pgsql.create_table
   Automatically create session and application variable table
@@ -87,6 +98,7 @@ session_pgsql.short_circuit
   array will makde session_pgsql save changes to table, otherwise
   it will not update table.  Access counter and expire field will not 
   be updated when update is skipped.
+  Default is off.
 
 session_pgsql.failover_mode
   If failover_mode is set to on, it will always use 1st db server
@@ -96,22 +108,25 @@ session_pgsql.failover_mode
   db server will not be enabled. Default is off.
   NOTE: session_pgsql do not mirror session data. It just switch
   to other database server to continue web services.
+  Default is off.
 
 session_pgsql.gc_interval
-  How often perform GC in seconds. Default is 3600 seconds.
+  How often perform GC in seconds. 
   If you set multiple db servers to session_pgsql.db, set only
   one of your web server to prevent unneeded garbage collections.
   It is good idea set to 0 (disable) and perform garbage collection
   by using cron or like in db server if you have multiple web servers
   accessed to the session db server(s).
+  Default is 3600 seconds (1 hour).
 
 session_pgsql.vacuum_interval
-  How often perform GC in seconds. Default is 18000 seconds.
+  How often perform GC in seconds. 
   If you set multiple db servers to session_pgsql.db, set only
   one of your web server to prevent unneeded vacuum operations.
   It is good idea set to 0 (disable) and perform vacuum
   by using cron or like in db server if you have multiple web servers
   accessed to the session db server(s).
+  Default is 18000 seconds (5 hours).
 
 [Functions]
 /* {{{ proto array session_pgsql_status(void)
