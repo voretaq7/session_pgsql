@@ -1,13 +1,11 @@
 /* 
    +----------------------------------------------------------------------+
-   | This source file is subject to LGPL license.	                      |
+   | This source file is subject to LGPL license.	                  |
    | Copyright (c) Yasuo Ohgaki                                           |
    +----------------------------------------------------------------------+
-   | Authors: Yasuo Ohgaki <yohgaki@php.net>							  |
+   | Authors: Yasuo Ohgaki <yohgaki@php.net>				  |
    +----------------------------------------------------------------------+
  */
-
-/* $Id: session_pgsql.c,v 1.27 2003/03/17 00:59:16 yohgaki Exp $ */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"

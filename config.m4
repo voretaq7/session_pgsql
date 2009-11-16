@@ -1,7 +1,3 @@
-dnl
-dnl $Id: config.m4,v 1.3 2003/01/16 10:32:39 yohgaki Exp $
-dnl
-
 PHP_ARG_WITH(session-pgsql,for pgsql sesssion storage support,
 [  --with-session-pgsql[=DIR] Include pgsql(PostgreSQL) support for session storage])
 
