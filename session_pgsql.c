@@ -120,8 +120,8 @@ STD_PHP_INI_ENTRY("session_pgsql.short_circuit", "0",    PHP_INI_SYSTEM, OnUpdat
 STD_PHP_INI_ENTRY("session_pgsql.keep_expired",  "0",    PHP_INI_SYSTEM, OnUpdateBool, keep_expired, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.use_app_vars",  "0",    PHP_INI_SYSTEM, OnUpdateBool, use_app_vars, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.serializable",  "0",    PHP_INI_SYSTEM, OnUpdateBool, serializable, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session_pgsql.gc_interval",   "3600", PHP_INI_SYSTEM, OnUpdateInt, gc_interval, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session_pgsql.vacuum_interval", "21600", PHP_INI_SYSTEM, OnUpdateInt, vacuum_interval, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.gc_interval",   "3600", PHP_INI_SYSTEM, OnUpdateLong, gc_interval, php_session_pgsql_globals, session_pgsql_globals)
+STD_PHP_INI_ENTRY("session_pgsql.vacuum_interval", "0",  PHP_INI_SYSTEM, OnUpdateLong, vacuum_interval, php_session_pgsql_globals, session_pgsql_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -197,7 +197,7 @@ PHP_MINIT_FUNCTION(session_pgsql)
 	}
 	/* init $_APP hash */
 	if (PS_PGSQL(use_app_vars)) {
-		zend_register_auto_global("_APP", sizeof("_APP")-1 TSRMLS_CC);
+		zend_register_auto_global("_APP", sizeof("_APP")-1, NULL TSRMLS_CC);
 	}
 	
 	/* register pgsql session save handler */
@@ -792,7 +792,7 @@ static int ps_pgsql_sess_read(const char *key, char **val, size_t *vallen TSRMLS
 					PS_PGSQL(sess_notice)  = (int)atoi(PQgetvalue(pg_result, 0, 4));
 					if (exp < now) {
 						*vallen = 0;
-						*val = empty_string;
+						*val = "";
 						PS_PGSQL(short_circuit) = 0; /* disable short circuit */
 					}
 					else {
@@ -1232,19 +1232,19 @@ PHP_FUNCTION(session_pgsql_info)
 		add_assoc_string(return_value,   "Address Created",    PS_PGSQL(sess_addr_created), 1);
 	}
 	else {
-		add_assoc_string(return_value,   "Address Created",    empty_string, 0);
+		add_assoc_string(return_value,   "Address Created",    "", 0);
 	}
 	if (PS_PGSQL(sess_addr_modified)) {
 		add_assoc_string(return_value,   "Address Modified",   PS_PGSQL(sess_addr_modified), 1);
 	}
 	else {
-		add_assoc_string(return_value,   "Address Modified",   empty_string, 0);
+		add_assoc_string(return_value,   "Address Modified",   "", 0);
 	}
 	if (PS_PGSQL(sess_custom)) {
 		add_assoc_string(return_value, "Custom", PS_PGSQL(sess_custom), 1);
 	}
 	else {
-		add_assoc_string(return_value, "Custom", empty_string, 0);
+		add_assoc_string(return_value, "Custom", "", 0);
 	}
 }
 /* }}} */
@@ -1300,7 +1300,7 @@ PHP_FUNCTION(session_pgsql_get_field)
 	if (PS_PGSQL(sess_custom) && PS_PGSQL(sess_custom)[0]) {
 		RETURN_STRING(PS_PGSQL(sess_custom), 1);
 	}
-	RETURN_STRING(empty_string, 0);
+	RETURN_STRING("", 0);
 }
 /* }}} */
 
@@ -1405,7 +1405,7 @@ PHP_FUNCTION(session_pgsql_get_error)
 		}
 		else {
 			/* new session */
-			add_assoc_string(return_value, "Error Message", empty_string, 0);
+			add_assoc_string(return_value, "Error Message", "", 0);
 		}
 		PQclear(pg_result);
 	}
