@@ -39,7 +39,6 @@ typedef struct _php_session_pgsql_globals {
 	char *db;
 	int create_table;
 	int serializable;
-	int use_app_vars;
 	char *sem_file_name;
 	int gc_interval;
 	int vacuum_interval;
@@ -72,9 +71,6 @@ typedef struct _php_session_pgsql_globals {
 	char *sess_addr_created;  /* malloc/free should be used */
 	char *sess_addr_modified; /* malloc/free should be used */
 	
-	int app_modified;
-	int app_new;
-	zval *app_vars;
 } php_session_pgsql_globals; 
 
 /* php function registration */
