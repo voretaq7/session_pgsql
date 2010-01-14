@@ -5,8 +5,7 @@
 session_pgsql is an additional session save handler module. It
 provides session storage using PostgreSQL database server(s). 
 
- - C implantation of session save handler with PostgreSQL. It could
-   twice as fast or more compare to script version of save handler.
+ - C implementation of session save handler with PostgreSQL.
  - Automatic session table creation.
  - Better garbage collection.
  - Multiple PostgreSQL servers support.
@@ -19,10 +18,10 @@ provides session storage using PostgreSQL database server(s).
 It is design to scale any size of web sites.
 
 [Requirements]
-PHP 4.3.0 or later
-PostgreSQL 7.2.0 or later as server
-libpq that comes with PostgreSQL 7.2.0 or later (and header to build)
-libmm (and header. I use mm-1.2.1)
+PHP 5.3.0 or later
+PostgreSQL 8.3.0 or later
+libpq that comes with PostgreSQL 8.3.0 or later (and header to build)
+libmm (and header. I use mm-1.4.2)
 
 [How to compile]
 
@@ -72,7 +71,7 @@ are likely included in php-devel package.
    not loaded, try to use full path to load module.
 7. Reboot your web server.
 
-Finally, do no forget to edit session_pgsql.db php.ini directive.
+Finally, do not forget to edit session_pgsql.db php.ini directive.
 See following sections for the ini directive usage.
 
 [How to use]
@@ -131,35 +130,29 @@ session_pgsql.keep_expired
   session record is deleted and insert record is created. 
   Default is off. 
 
-session_pgsql.use_app_vars 
-  Use application level variable ($_APP) or not.
-  Use different session name to change application.
-  i.e. use session_name('AppName')
-  Use of application variable has severe performance penalty.
-  Default is off.
-
 session_pgsql.create_table
-  Automatically create session and application variable table
-  if set to on. session_pgsql creates tables, php_session and php_app_vers,
-  in the database. Default is on.
+  Automatically create session variable table
+  if set to on. session_pgsql creates tables, php_session
+  in the database.
+  Default is on.
 
 session_pgsql.short_circuit
   If short_circuit is set to on, it will skip UPDATE statement when 
   skipping is possible. Setting error or custom field value or SESSION
   array will make session_pgsql save changes to table, otherwise
-  it will not update table.  Access counter and expire field will not 
-  be updated when update is skipped.
-  Default is off.
+  it will not update table.
+  NOTE: Access counter and expire field are not updated if this is
+  enabled -- This has garbage collection implications.
+  Default is off (always update).
 
 session_pgsql.failover_mode
   If failover_mode is set to on, it will always use 1st db server
   and if 1st server fails, it will use next available db server.
-  create session and application variable table
   if set to on. If this option is enabled, load balancing session 
   db server will not be enabled. Default is off.
-  NOTE: session_pgsql do not mirror session data. It just switch
-  to other database server to continue web services.
-  Default is off.
+  NOTE: This will not mirror your data, it just switches to the
+  other database server if it can't reach the first one.
+  Default is off, since you should be pointing at a redundant DB.
 
 session_pgsql.gc_interval
   How often perform GC in seconds. 
@@ -172,14 +165,12 @@ session_pgsql.gc_interval
   Default is 3600 seconds (1 hour).
 
 session_pgsql.vacuum_interval
-  How often perform GC in seconds. 
-  If you set multiple db servers to session_pgsql.db, set only
-  one of your web server to prevent unneeded vacuum operations.
-  It is good idea set to 0 (disable) and perform vacuum
-  by using cron or like in db server if you have multiple web servers
-  accessed to the session db server(s).
-  NOTE: It's good idea performing vaccum and reindex using cron or like.
-  Default is 21600 seconds (6 hours).
+  How often perform VACUUM ANALYZE on the session table.
+  You should never need to set this with Postgres >= 8.3.0
+  so just leave it set to zero.
+  If you absolutely MUST vacuum the table set this on only
+  ONE server to prevent unneded VACUUM operations.
+  Default is 0 (Never), since you should use autocavuum.
 
 [Module Functions]
 /* {{{ proto array session_pgsql_status(void)
@@ -197,8 +188,8 @@ session_pgsql.vacuum_interval
 /* {{{ proto array session_pgsql_get_error([bool with_error_message])
    Returns number of errors and last error message */
 
-[Known Problem]
-Please report problem to the author.
+[Known Problems]
+Please report problems to the maintainer - mikeg@bsd-box.net.
 
 [Session Table Definition]
 
@@ -221,14 +212,6 @@ CREATE TABLE php_session (
 
 CREATE INDEX php_session_idx ON php_session USING BTREE (sess_id);
 
-[Application Variable Table Definition]
-
-CREATE TABLE php_app_vars (
-  app_modified       integer,
-  app_name           text,
-  app_vars           text
-);
- 
 
 NOTE: If you use HASH for index, you'll have deadlock problem when
 server load *very* high. Even if it's unlikely to have deadlock under 
@@ -240,8 +223,8 @@ User may change session table as long as all fields are defined.
  - More efficient application variable handling
 
 [History]
- 1.0.0 - 2003/?/??
-  - Stable release.
+ 1.0.0 - 2009/12/01
+  - Stable release for PHP-5.3.0 (mg).
 
  0.6.1 - 2003/1/19
   - Stable release candidate.
