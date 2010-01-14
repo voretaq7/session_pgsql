@@ -17,6 +17,11 @@ provides session storage using PostgreSQL database server(s).
 
 It is design to scale any size of web sites.
 
+This release of the session_pgsql extension was based on work by , who 
+graciously allowed its re-release under the PHP license.
+It was modernized by Michael Graziano in 2009 to allow it to work on PHP 5.3.
+
+
 [Requirements]
 PHP 5.3.0 or later
 PostgreSQL 8.3.0 or later
