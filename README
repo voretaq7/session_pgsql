@@ -1,7 +1,5 @@
         PostgreSQL database session save handler module
 
-[What is it]
-
 session_pgsql is an additional session save handler module. It
 provides session storage using PostgreSQL database server(s). 
 
@@ -15,10 +13,11 @@ provides session storage using PostgreSQL database server(s).
  - Automatic session table vacuum.
  - Short circuit UPDATE
 
-It is design to scale any size of web sites.
+It is designed to scale to any deployment size, though it has only received
+medium-scale testing.
 
-This release of the session_pgsql extension was based on work by , who 
-graciously allowed its re-release under the PHP license.
+This release of the session_pgsql extension was based on work by Yasuo Ohgaki,
+who graciously allowed its re-release under the PHP license.
 It was modernized by Michael Graziano in 2009 to allow it to work on PHP 5.3.
 
 
@@ -29,12 +28,14 @@ libpq that comes with PostgreSQL 8.3.0 or later (and header to build)
 libmm (and header. I use mm-1.4.2)
 
 [How to compile]
+If you are using PECL you should just be able to "pecl install" this extension.
 
-To compile PHP with mod_pgsql, you need "--with-session-pgsql[=DIR]"
-when you configure PHP. [=DIR] is installation path for
-PostgreSQL. You don't have to compile PHP with PostgreSQL module, but
-your system must have libpq and headers installed.  It also uses libmm
-your system must have libmm and headers installed to compile.
+To compile it manually, you need to do one of the following:
+
+Static component of PHP:
+To build session_pgsql into PHP itself you need to add the 
+"--with-session-pgsql[=DIR]" option to the configure line.
+[=DIR] is installation path for PostgreSQL.
 
 1. Change directory to <php source root>/ext and move tar ball to
    there.
@@ -51,11 +52,13 @@ your system must have libmm and headers installed to compile.
    Do not forget to edit php.ini to load session_pgsql.so.
 5. Reboot your web server.
 
+As a PHP Module:
 You may also want to compile session pgsql as stand alone PHP module.
 To compile session_pgsql as stand alone module without PHP source, you
-need PHP header and build tools installed. These files are install when
-"make install" is done with PHP source. If you are using RPM, these files
-are likely included in php-devel package.
+need the PHP headers and build tools installed.
+These files are installed when you "make install" from the PHP sources.
+If you are using a vendor-packaged PHP these files are likely in a
+"php-devel" or "php-dev" package.
 
 1. Unpack session_pgsql source.
    % tar zxvf session_pgsql-<version>.tar.bz2
@@ -75,9 +78,6 @@ are likely included in php-devel package.
 6. Verify with phpinfo() if session_pgsql is loaded or not. If it's
    not loaded, try to use full path to load module.
 7. Reboot your web server.
-
-Finally, do not forget to edit session_pgsql.db php.ini directive.
-See following sections for the ini directive usage.
 
 [How to use]
 
@@ -217,19 +217,15 @@ CREATE TABLE php_session (
 
 CREATE INDEX php_session_idx ON php_session USING BTREE (sess_id);
 
-
-NOTE: If you use HASH for index, you'll have deadlock problem when
-server load *very* high. Even if it's unlikely to have deadlock under 
-normal operation, but it can. DO NOT USE HASH INDEX.
-
-User may change session table as long as all fields are defined.
+You may change the session table as long as all fields above are defined.
 
 [ToDo]
- - More efficient application variable handling
 
 [History]
  1.0.0 - 2009/12/01
   - Stable release for PHP-5.3.0 (mg).
+  - Removed application variable support
+    (Narrowing scope to what I use/can test)
 
  0.6.1 - 2003/1/19
   - Stable release candidate.
