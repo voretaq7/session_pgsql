@@ -169,14 +169,6 @@ session_pgsql.gc_interval
   NOTE: It's good idea performing garbage collection using cron or like.
   Default is 3600 seconds (1 hour).
 
-session_pgsql.vacuum_interval
-  How often perform VACUUM ANALYZE on the session table.
-  You should never need to set this with Postgres >= 8.3.0
-  so just leave it set to zero.
-  If you absolutely MUST vacuum the table set this on only
-  ONE server to prevent unneded VACUUM operations.
-  Default is 0 (Never), since you should use autocavuum.
-
 [Module Functions]
 /* {{{ proto array session_pgsql_status(void)
    Returns current pgsql save handler status */

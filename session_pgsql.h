@@ -41,7 +41,6 @@ typedef struct _php_session_pgsql_globals {
 	int serializable;
 	char *sem_file_name;
 	int gc_interval;
-	int vacuum_interval;
 	int failover_mode;
 	int disable;
 	int short_circuit;

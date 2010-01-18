@@ -40,7 +40,6 @@ ps_module ps_mod_pgsql = {
 typedef struct {
 	MM *mm;
 	time_t *last_gc;
-	time_t *last_vacuum;
 	pid_t owner;
 } ps_pgsql_instance_t;
 
@@ -116,9 +115,7 @@ STD_PHP_INI_ENTRY("session_pgsql.create_table",  "1",    PHP_INI_SYSTEM, OnUpdat
 STD_PHP_INI_ENTRY("session_pgsql.failover_mode", "0",    PHP_INI_SYSTEM, OnUpdateBool, failover_mode, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.short_circuit", "0",    PHP_INI_SYSTEM, OnUpdateBool, short_circuit, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.keep_expired",  "0",    PHP_INI_SYSTEM, OnUpdateBool, keep_expired, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session_pgsql.serializable",  "0",    PHP_INI_SYSTEM, OnUpdateBool, serializable, php_session_pgsql_globals, session_pgsql_globals)
 STD_PHP_INI_ENTRY("session_pgsql.gc_interval",   "3600", PHP_INI_SYSTEM, OnUpdateLong, gc_interval, php_session_pgsql_globals, session_pgsql_globals)
-STD_PHP_INI_ENTRY("session_pgsql.vacuum_interval", "0",  PHP_INI_SYSTEM, OnUpdateLong, vacuum_interval, php_session_pgsql_globals, session_pgsql_globals)
 PHP_INI_END()
 /* }}} */
 
@@ -243,9 +240,6 @@ PHP_MSHUTDOWN_FUNCTION(session_pgsql)
 	if (ps_pgsql_instance->owner == getpid() && ps_pgsql_instance->mm) {
 		if (ps_pgsql_instance->last_gc) {
 			mm_free(ps_pgsql_instance->mm, ps_pgsql_instance->last_gc);
-		}
-		if (ps_pgsql_instance->last_vacuum) {
-			mm_free(ps_pgsql_instance->mm, ps_pgsql_instance->last_vacuum);
 		}
 		mm_destroy(ps_pgsql_instance->mm);
 		free(ps_pgsql_instance);
@@ -387,10 +381,8 @@ static int php_ps_pgsql_init_mm(TSRMLS_D)
 		php_log_err("session pgsql: MM failure" TSRMLS_CC);		
 		return FAILURE;
 	}
-	ps_pgsql_instance->last_vacuum = mm_calloc(ps_pgsql_instance->mm, 1, sizeof(time_t));
 	ps_pgsql_instance->owner = getpid();
-	*(ps_pgsql_instance->last_gc) = time(NULL) + PS_PGSQL(gc_interval);
-	*(ps_pgsql_instance->last_vacuum) = time(NULL) + PS_PGSQL(vacuum_interval);
+	*(ps_pgsql_instance->last_gc) = PS_PGSQL(gc_interval);
 
 	return SUCCESS;
 }
@@ -604,32 +596,6 @@ static int ps_pgsql_sess_read(const char *key, char **val, size_t *vallen TSRMLS
 	char *query_tpl = "SELECT sess_expire, sess_counter, sess_error, sess_warning, sess_notice, sess_data, sess_custom, sess_created, sess_modified, sess_addr_created, sess_addr_modified FROM php_session WHERE sess_id = '%s';";
 	int ret = FAILURE;
 
-	/* start reading */
-	if (PS_PGSQL(serializable)) {
-		pg_result = PQexec(PS_PGSQL(current_db), "BEGIN; SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;");
-	}
-	else {
-		pg_result = PQexec(PS_PGSQL(current_db), "BEGIN;");
-	}
-	PQclear(pg_result);
-	if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
-		/* try again. server may be rebooted */
-		PQreset(PS_PGSQL(current_db));
-		if (PS_PGSQL(serializable)) {
-			pg_result = PQexec(PS_PGSQL(current_db), "BEGIN; SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;");
-		}
-		else {
-			pg_result = PQexec(PS_PGSQL(current_db), "BEGIN;");
-		}
-		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
-			php_error(E_WARNING, "session pgsql: Cannot start transaction. (%s)", PQresultErrorMessage(pg_result));
-			PQclear(pg_result);
-			return FAILURE;
-		}
-		PQclear(pg_result);
-	}
-
-
 	PS_PGSQL(sess_new) = 0;
 	PS_PGSQL(sess_del) = 0;
 	*vallen = 0;
@@ -840,13 +806,6 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 	}
 	efree(escaped_val);
 	
-	pg_result = PQexec(PS_PGSQL(current_db), "END;");
-	if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
-		PQclear(pg_result);
-		return FAILURE;
-	}
-	PQclear(pg_result);
-	
 	return SUCCESS;	
 }
 /* }}} */
@@ -858,7 +817,6 @@ static int ps_pgsql_sess_gc(TSRMLS_D)
 	PGresult *pg_result;
 	char query[QUERY_BUF_SIZE+1];
 	char *query_gc = "DELETE FROM php_session WHERE sess_expire < %d;";
-	char *query_vacuum = "VACUUM ANALYZE php_session; REINDEX TABLE php_session;";
 	int id;
 	time_t now = time(NULL);
 
@@ -867,28 +825,17 @@ static int ps_pgsql_sess_gc(TSRMLS_D)
 	sprintf(query, query_gc, now);
 	if (*(ps_pgsql_instance->last_gc) &&
 		*(ps_pgsql_instance->last_gc) < now - PS_PGSQL(gc_interval)) {
+		ELOG("GC Timer Fired - Doing GC");
 		*(ps_pgsql_instance->last_gc) = now;
 		for (id = 0; id < PS_PGSQL(servers); id++) {
 			if (PS_PGSQL(pgsql_link)[id]) {
 				PQsendQuery(PS_PGSQL(pgsql_link)[id], query);
+				while ((pg_result = PQgetResult(PS_PGSQL(pgsql_link)[id])))
+					PQclear(pg_result);
 			}
 		}
-	}
-	if (*(ps_pgsql_instance->last_vacuum) &&
-		*(ps_pgsql_instance->last_vacuum) < now - PS_PGSQL(vacuum_interval)) {
-		*(ps_pgsql_instance->last_vacuum) = now;
-		for (id = 0; id < PS_PGSQL(servers); id++) {
-			if (PS_PGSQL(pgsql_link)[id]) {
-				PQsendQuery(PS_PGSQL(pgsql_link)[id], query_vacuum);
-			}
-		}
-	}
-	/* Get result and clear */
-	for (id = 0; id < PS_PGSQL(servers); id++) {
-		if (PS_PGSQL(pgsql_link)[id]) {
-			while ((pg_result = PQgetResult(PS_PGSQL(pgsql_link)[id])))
-				PQclear(pg_result);
-		}
+	} else {
+		ELOG("GC Timer not fired or GC disabled - Skipping GC");
 	}
 	return SUCCESS;
 }
@@ -973,7 +920,7 @@ PS_DESTROY_FUNC(pgsql)
 	/* session module calls PS(mod)->close, request shutdown then request init function.
 	   Transaction should be ended here. (session_pgsql don't use session read/write for
 	   better performance */
-	char *query_update = "DELETE FROM php_session WHERE sess_id = '%s';END;";
+	char *query_update = "DELETE FROM php_session WHERE sess_id = '%s';";
 	int ret = FAILURE;
 
 	ELOG("DESTROY Called");
