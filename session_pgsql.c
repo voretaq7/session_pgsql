@@ -83,7 +83,7 @@ static PHP_INI_MH(OnUpdate_session_pgsql_db)
 	for (i = 0; i < len; i++) {
 		if (new_value[i] == ';') {
 			if (cnt > MAX_PGSQL_SERVERS) {
-				php_log_err("session pgsql: Too many session database servers. Some servers are ignored." TSRMLS_CC);
+				php_log_err("session_pgsql: Too many session database servers. Some servers are ignored." TSRMLS_CC);
 				break;
 			}
 			PS_PGSQL(connstr)[cnt] = malloc(&new_value[i] - tmp + 1); 
@@ -180,7 +180,7 @@ PHP_MINIT_FUNCTION(session_pgsql)
 	if (PS_PGSQL(disable) || !strcmp(sapi_module.name, "cli")
 		|| !strcmp(sapi_module.name, "cgi") || !strcmp(sapi_module.name, "cgi-fcgi")) {
 		if (!PS_PGSQL(disable) && strcmp(sapi_module.name, "cli")) {
-			php_log_err("session pgsql: Disabled. It will not work with CLI or CGI and. Set session_pgsql.disable in php.ini to remove this error message." TSRMLS_CC);
+			php_log_err("session_pgsql: Disabled. It will not work with CLI or CGI and. Set session_pgsql.disable in php.ini to remove this error message." TSRMLS_CC);
 		}
 		PS_PGSQL(disable) = 1;
 		return SUCCESS; /* Don't spit annoying error messages */
@@ -264,7 +264,7 @@ PHP_RINIT_FUNCTION(session_pgsql)
 	/* initilize postgresql server connections */
 	if (php_ps_pgsql_init_servers(0 TSRMLS_CC) == FAILURE) {
 		/* No servers are available */
-		php_log_err("session pgsql: Cannot connect to any PostgreSQL server. Check session_pgsql.db" TSRMLS_CC);
+		php_log_err("session_pgsql: Cannot connect to any PostgreSQL server. Check session_pgsql.db" TSRMLS_CC);
 		return FAILURE; 
 	}
 
@@ -371,14 +371,14 @@ static int php_ps_pgsql_init_mm(TSRMLS_D)
 	if (!ps_pgsql_instance->mm) {
 		mm_destroy(ps_pgsql_instance->mm);
 		free(ps_pgsql_instance);
-		php_log_err("session pgsql: MM failure" TSRMLS_CC);		
+		php_log_err("session_pgsql: MM failure" TSRMLS_CC);		
 		return FAILURE;
 	}
 	ps_pgsql_instance->last_gc = mm_calloc(ps_pgsql_instance->mm, 1, sizeof(time_t));
 	if (!ps_pgsql_instance->mm) {
 		mm_destroy(ps_pgsql_instance->mm);
 		free(ps_pgsql_instance);
-		php_log_err("session pgsql: MM failure" TSRMLS_CC);		
+		php_log_err("session_pgsql: MM failure" TSRMLS_CC);		
 		return FAILURE;
 	}
 	ps_pgsql_instance->owner = getpid();
@@ -413,7 +413,7 @@ static int php_ps_pgsql_init_servers(const int force_init TSRMLS_DC)
 			&& PS_PGSQL(pgsql_link)[id] && PS_PGSQL(create_table)) {
 			/* if there is problem, link is set to NULL */
 			if (php_ps_pgsql_create_table(id TSRMLS_CC) == FAILURE) {
-				php_error(E_NOTICE, "session pgsql: Cannot create tables (%s)", PS_PGSQL(connstr)[id]);
+				php_error(E_NOTICE, "session_pgsql: Cannot create tables (%s)", PS_PGSQL(connstr)[id]);
 			}
 		}
 	}
@@ -495,7 +495,7 @@ static PGconn *php_ps_pgsql_connect(const int id TSRMLS_DC)
 			/* seems it's really dead */
 			PQfinish(PS_PGSQL(pgsql_link)[id]);
 			PS_PGSQL(pgsql_link)[id] = NULL;
-			php_error(E_WARNING, "session pgsql: PostgreSQL server connection is broken or bad connection string (%s)", PS_PGSQL(connstr)[id]);
+			php_error(E_WARNING, "session_pgsql: PostgreSQL server connection is broken or bad connection string (%s)", PS_PGSQL(connstr)[id]);
 			return NULL;
 		}
 	}
@@ -657,7 +657,7 @@ static int ps_pgsql_sess_read(const char *key, char **val, size_t *vallen TSRMLS
 	}
 	else {
 		PS_PGSQL(sess_new) = 1;
-		php_error(E_NOTICE,"session pgsql: Invalid Session ID detected");
+		php_error(E_NOTICE,"session_pgsql: Invalid Session ID detected");
 	}
 	if (*vallen == 0) {
 		*val = estrndup("", 0);
@@ -845,7 +845,7 @@ static int ps_pgsql_sess_gc(TSRMLS_D)
 			if (PS_PGSQL(pgsql_link)[id]) {
 				pg_result = PQexec(PS_PGSQL(pgsql_link)[id], query);
 				if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
-					php_log_err("session pgsql: GC could not delete sessions - Check DB Configuration." TSRMLS_CC);		
+					php_log_err("session_pgsql: GC could not delete sessions - Check DB Configuration." TSRMLS_CC);		
 				}
 				PQclear(pg_result);
 			}
