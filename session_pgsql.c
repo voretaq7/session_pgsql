@@ -434,7 +434,7 @@ static int php_ps_pgsql_create_table(const int id TSRMLS_DC)
 	PGresult *pg_result;
 	char *query_create_sess_table =
 	"CREATE TABLE php_session ( "
-	"sess_id            text, "
+	"sess_id            text	PRIMARY KEY, "
 	"sess_name          text, "
 	"sess_data          text, "
 	"sess_created       integer, "
@@ -465,9 +465,6 @@ static int php_ps_pgsql_create_table(const int id TSRMLS_DC)
 		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
 			goto cleanup;
 		}
-		PQclear(pg_result);
-		pg_result = PQexec(PS_PGSQL(pgsql_link)[id],
-						   "CREATE INDEX php_session_idx ON php_session USING BTREE (sess_id);");
 		PQclear(pg_result);
 	}
 	return SUCCESS;
@@ -698,6 +695,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 	char *escaped_val, *escaped_custom;
 	smart_str buf= {0};
  	size_t custom_len, key_len;
+	int ret = SUCCESS;
 
 	if (!ps_pgsql_valid_str(key TSRMLS_CC)) {
 		return FAILURE;
@@ -748,6 +746,10 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		snprintf(query, query_len, query_insert,
 				 key, escaped_sess_name, now, PS_PGSQL(remote_addr), now, exp, escaped_val, buf.c);
 		pg_result = PQexec(PS_PGSQL(current_db), query);
+		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+			php_log_err("session_pgsql: Could not create session - Check DB Configuration (GRANT INSERT)." TSRMLS_CC);		
+			ret = FAILURE;
+		}
 		PQclear(pg_result);
 		smart_str_free(&buf);
 		efree(escaped_sess_name);
@@ -777,6 +779,10 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 				 escaped_val, now, PS_PGSQL(remote_addr), exp, PS_PGSQL(sess_cnt),
 				 PS_PGSQL(sess_error), PS_PGSQL(sess_warning), PS_PGSQL(sess_notice), buf.c, key);
 		pg_result = PQexec(PS_PGSQL(current_db), query);
+		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+			php_log_err("session_pgsql: Could not update session - Check DB Configuration (GRANT UPDATE)." TSRMLS_CC);		
+			ret = FAILURE;
+		}
 		PQclear(pg_result);
 		smart_str_free(&buf);
 		efree(query);
@@ -799,6 +805,14 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 		smart_str_0(&buf);
 		
 		pg_result = PQexec(PS_PGSQL(current_db), buf.c);
+		if (PQresultStatus(pg_result) != PGRES_COMMAND_OK && ret != FAILURE) {
+			/*
+			 * If we succeeded with an INSERT this is a warning right now;
+			 * And if we already failed with an update we don't want to
+			 * spam the logfile with duplicate error messages.
+			 */
+			php_log_err("session_pgsql: Could not update session - Check DB Configuration (GRANT UPDATE)." TSRMLS_CC);		
+		}
 
 		PQclear(pg_result);
 		smart_str_free(&buf);
@@ -806,7 +820,7 @@ static int ps_pgsql_sess_write(const char *key, const char *val, const size_t va
 	}
 	efree(escaped_val);
 	
-	return SUCCESS;	
+	return ret;	
 }
 /* }}} */
 
@@ -829,9 +843,11 @@ static int ps_pgsql_sess_gc(TSRMLS_D)
 		*(ps_pgsql_instance->last_gc) = now;
 		for (id = 0; id < PS_PGSQL(servers); id++) {
 			if (PS_PGSQL(pgsql_link)[id]) {
-				PQsendQuery(PS_PGSQL(pgsql_link)[id], query);
-				while ((pg_result = PQgetResult(PS_PGSQL(pgsql_link)[id])))
-					PQclear(pg_result);
+				pg_result = PQexec(PS_PGSQL(pgsql_link)[id], query);
+				if (PQresultStatus(pg_result) != PGRES_COMMAND_OK) {
+					php_log_err("session pgsql: GC could not delete sessions - Check DB Configuration." TSRMLS_CC);		
+				}
+				PQclear(pg_result);
 			}
 		}
 	} else {
@@ -935,6 +951,9 @@ PS_DESTROY_FUNC(pgsql)
 		pg_result = PQexec(PS_PGSQL(current_db), query);
 		if (PQresultStatus(pg_result) == PGRES_COMMAND_OK) {
 			ret = SUCCESS;
+		}
+		else {
+			php_log_err("session_pgsql: Could not destroy session - Check DB Configuration (GRANT DELETE)." TSRMLS_CC);		
 		}
 		PQclear(pg_result);
 		efree(query);
@@ -1139,7 +1158,7 @@ PHP_FUNCTION(session_pgsql_add_error)
 
 	PS_PGSQL(sess_short_circuit) = 0; /* force session write */
 	switch (error_level) {
-		case E_WARNING:
+		case E_ERROR:
 		case E_USER_ERROR:
 			PS_PGSQL(sess_error)++;
 			break;
