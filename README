@@ -191,7 +191,7 @@ Please report problems to the maintainer - mikeg@bsd-box.net.
 [Session Table Definition]
 
 CREATE TABLE php_session (
-  sess_id            text,
+  sess_id            text	PRIMARY KEY,
   sess_name          text,
   sess_data          text,
   sess_created       integer,
@@ -206,8 +206,6 @@ CREATE TABLE php_session (
   sess_err_message   text,
   sess_custom        text
 );
-
-CREATE INDEX php_session_idx ON php_session USING BTREE (sess_id);
 
 You may change the session table as long as all fields above are defined.
 
