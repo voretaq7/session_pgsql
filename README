@@ -5,12 +5,11 @@ provides session storage using PostgreSQL database server(s).
 
  - C implementation of session save handler with PostgreSQL.
  - Automatic session table creation.
- - Better garbage collection.
+ - Automatic garbage collection/Session Expiration.
  - Multiple PostgreSQL servers support.
  - Automatic db server failover(switching) when there is trouble.
  - Automatic db server load balancing where there are multiple
    PostgreSQL servers.
- - Automatic session table vacuum.
  - Short circuit UPDATE
 
 It is designed to scale to any deployment size, though it has only received
@@ -28,7 +27,8 @@ libpq that comes with PostgreSQL 8.3.0 or later (and header to build)
 libmm (and header. I use mm-1.4.2)
 
 [How to compile]
-If you are using PECL you should just be able to "pecl install" this extension.
+If you are using PECL you should just be able to "pecl install" this extension
+(and you probably aren't reading this file if that's the case).
 
 To compile it manually, you need to do one of the following:
 
@@ -48,9 +48,7 @@ To build session_pgsql into PHP itself you need to add the
    % ./configure --with-session-pgsql <other configure options>
    % make
    % make install
-4. If you choose to build stand alone module with "--with-session-pgsql=shared"
-   Do not forget to edit php.ini to load session_pgsql.so.
-5. Reboot your web server.
+4. Restart your web server.
 
 As a PHP Module:
 You may also want to compile session pgsql as stand alone PHP module.
@@ -67,84 +65,100 @@ If you are using a vendor-packaged PHP these files are likely in a
 3. Run phpize. This will creates configure script and files needed.
    % phpize
 4. Run configure script, build and install module
-   % ./configure --with-session-pgsql
+   % ./configure
    % make
    % make install
-   This will build and install session_pgsql.so module and install
-   the module file to php module directory.
+   This will build the session_pgsql.so module and should install
+   the module file to php module directory (Verify the output of
+   make install against php-config's idea of where modules should live).
 5. Edit your php.ini to load session_pgsql. Add following line to
    php.ini
    extension=session_pgsql.so
-6. Verify with phpinfo() if session_pgsql is loaded or not. If it's
-   not loaded, try to use full path to load module.
-7. Reboot your web server.
+6. Restart your web server.
+7. Verify with phpinfo() if session_pgsql is loaded or not. If it's
+   not loaded, try using the full path to the module.
+
 
 [How to use]
 
 Once you have successfully installed session_pgsql (and PHP of course)
-and PostgreSQL to localhost. All you have to do is (as postgres super user)
+and have a PostgreSQL server to point it at you need to create a datbase and
+user for session_pgsql to use.
 
-% createuser nobody
-% createdb php_session
+All you have to do is (as postgres super user)
+	% createuser php_session
+	% createdb php_session
 
-In your php.ini
-session.save_handler = pgsql
-or
-In your script (make sure you call it *before* staring session)
-session_module_name('pgsql');
+Then in your php.ini file
+	session.save_handler = pgsql
+
+or in your script (*before* staring any sessions)
+	session_module_name('pgsql');
 
 session_pgsql connects to local PostgreSQL backend and create session
 table automatically if needed. If you would like to use remote PostgreSQL
 server or even multiple PostgreSQL servers, edit session_pgsql.db php.ini
 configuration directive.
 
-NOTE: It cannot be used with CGI/CLI binary or dl() or loading from .htaccess.
-NOTE: It's good idea to have more secure setting. Change security options 
-      according your security needs.
+NOTE: session_pgsql cannot be used with CGI/CLI binary, dl() or loading from
+      .htaccess
+NOTE: It's good idea to have fairly secure settings on the session DB/Table.
+      the session_pgsql user needs:
+         The CONNECT privilege on the database
+         The USAGE privilege on the schema the table resides in
+         The SELECT, INSERT, UPDATE and DELETE privileges on the session table.
+      The session_pgsql user SHOULD NOT be a superuser.
 
 [php.ini settings]
 
-Following php.ini directives are recognized by session and session_pgsql
+The following php.ini directives are recognized by session and session_pgsql
 module.
 
 session.save_handler
   "pgsql" for session_pgsql session.
 
 session.*
-  save_path is ignored. Other session.* settings are also used for
-  session_pgsql.
+  save_path is ignored - I suggest setting it to "session_pgsql" or similar
+  since it gets passed up the PHP error chain in warning/error messages and
+  can help make debugging easier.
+
+  Other session.* settings are also used for session_pgsql.
 
 session_pgsql.db          
   Valid PostgreSQL database connection string. 
   For example, "host=localhost dbname=php_session user=nobody" can
   be set. This example is the default.
+
   You can specify multiple PostgreSQL by separating ";". e.g.
-  "host=server1 dbname=php_session user=nobody;host=server2 dbname=php_session user=nobody"
-  If multiple servers are set, session_pgsql automatically balance 
-  db server loads. If one of session db server fails, it will try to
-  use available db server automatically.
-  NOTE: database name must be "php_session". Other connection options
-        may be changed.
+  "host=server1 dbname=somedb user=user1;host=server2 dbname=otherdb user=user2"
+  If multiple servers are set, session_pgsql will try to automatically balance 
+  db server load. If one of session db server fails, it will try to
+  use other available db servers automatically.
+
+  NOTE: It is recommended that you use database-level load balancing and
+        redundancy rather than specifying multiple DB servers.
+
   NOTE: If you have multiple web/db servers, make sure session_pgsql.db
         is the same value for all web servers.
+
   Default is "host=localhost dbname=php_session user=nobody"
 
 session_pgsql.keep_expired
   Keep expired data except session values. Counter, created time, created
   IP address, etc is kept when this is set to on. If this option is off
   session record is deleted and insert record is created. 
+
   Default is off. 
 
 session_pgsql.create_table
-  Automatically create session variable table
-  if set to on. session_pgsql creates tables, php_session
-  in the database.
+  Automatically create session variable table.
+  If set to on session_pgsql will try to create the php_session table.
   Default is on.
 
 session_pgsql.short_circuit
   If short_circuit is set to on, it will skip UPDATE statement when 
-  skipping is possible. Setting error or custom field value or SESSION
-  array will make session_pgsql save changes to table, otherwise
+  skipping is possible. Setting error or custom field value or $_SESSION
+  array values will make session_pgsql save changes to table, otherwise
   it will not update table.
   NOTE: Access counter and expire field are not updated if this is
   enabled -- This has garbage collection implications.
@@ -156,37 +170,26 @@ session_pgsql.failover_mode
   if set to on. If this option is enabled, load balancing session 
   db server will not be enabled. Default is off.
   NOTE: This will not mirror your data, it just switches to the
-  other database server if it can't reach the first one.
+        other database server if it can't reach the first one.
+        It is recommended that you use database-level load balancing and
+        redundancy rather than using failover_mode
+
   Default is off, since you should be pointing at a redundant DB.
 
 session_pgsql.gc_interval
-  How often perform GC in seconds. 
-  If you set multiple db servers to session_pgsql.db, set only
-  one of your web server to prevent unneeded garbage collections.
+  How often perform GC (in seconds). 
   It is good idea set to 0 (disable) and perform garbage collection
-  by using cron or like in db server if you have multiple web servers
-  accessed to the session db server(s).
-  NOTE: It's good idea performing garbage collection using cron or like.
+  using cron, especially if you have multiple web servers.
+  Negative values are allowed, and will cause GC to run on EVERY
+  session access.
   Default is 3600 seconds (1 hour).
 
-[Module Functions]
-/* {{{ proto array session_pgsql_status(void)
-   Returns current pgsql save handler status */
-/* {{{ proto bool session_pgsql_reset(void)
-   Reset connection to session database servers */
-/* {{{ proto array session_pgsql_info(void)
-   Returns current session info */
-/* {{{ proto bool session_pgsql_set_field(string value)
-   Set custom field value */
-/* {{{ proto string session_pgsql_get_field(void)
-   Get custom field value */
-/* {{{ proto bool session_pgsql_add_error(int error_level [, string error_message])
-   Increments error counts and sets last error message */
-/* {{{ proto array session_pgsql_get_error([bool with_error_message])
-   Returns number of errors and last error message */
-
 [Known Problems]
-Please report problems to the maintainer - mikeg@bsd-box.net.
+This extension does not work with SquirrelMail -- this appears to be due
+to problems with how SquirrelMail handles Sessions.  Patches to fix this
+are welcomed.
+
+Please report any problems you find to the maintainer - mikeg@bsd-box.net.
 
 [Session Table Definition]
 
@@ -212,6 +215,10 @@ You may change the session table as long as all fields above are defined.
 [ToDo]
 
 [History]
+ 1.0.1 - 2010/01/19
+  - Minor fixes and tweaks in error handling
+  - Updated CREATE TABLE statement to define a PKEY
+
  1.0.0 - 2009/12/01
   - Stable release for PHP-5.3.0 (mg).
   - Removed application variable support
