@@ -972,7 +972,7 @@ PHP_FUNCTION(session_pgsql_status)
 		RETURN_FALSE;
 	}
 	if (!PS_PGSQL(current_db)) {
-		php_error(E_NOTICE, "session_pgsql has no database connection");
+		php_error(E_ERROR, "session_pgsql has no database connection");
 		RETURN_FALSE;
 	}
 
@@ -1026,7 +1026,7 @@ PHP_FUNCTION(session_pgsql_info)
 		RETURN_FALSE;
 	}
 	if (!PS_PGSQL(current_db)) {
-		php_error(E_NOTICE, "session_pgsql has no database connection");
+		php_error(E_ERROR, "session_pgsql has no database connection");
 	}
 
 	array_init(return_value);
@@ -1078,7 +1078,7 @@ PHP_FUNCTION(session_pgsql_set_field)
 		RETURN_FALSE;
 	}
 	if (!PS_PGSQL(current_db)) {
-		php_error(E_NOTICE, "session_pgsql has no database connection");
+		php_error(E_ERROR, "session_pgsql has no database connection");
 		RETURN_FALSE;
 	}
 
@@ -1105,7 +1105,7 @@ PHP_FUNCTION(session_pgsql_get_field)
 		RETURN_FALSE;
 	}
 	if (!PS_PGSQL(current_db)) {
-		php_error(E_NOTICE, "session_pgsql has no database connection");
+		php_error(E_ERROR, "session_pgsql has no database connection");
 		RETURN_FALSE;
 	}
 
@@ -1133,13 +1133,13 @@ PHP_FUNCTION(session_pgsql_add_error)
 		RETURN_FALSE;
 	}
 	if (!PS_PGSQL(current_db)) {
-		php_error(E_NOTICE, "session_pgsql has no database connection");
+		php_error(E_ERROR, "session_pgsql has no database connection");
 		RETURN_FALSE;
 	}
 
 	PS_PGSQL(sess_short_circuit) = 0; /* force session write */
 	switch (error_level) {
-		case E_ERROR:
+		case E_WARNING:
 		case E_USER_ERROR:
 			PS_PGSQL(sess_error)++;
 			break;
@@ -1182,7 +1182,7 @@ PHP_FUNCTION(session_pgsql_get_error)
 		RETURN_FALSE;
 	}
 	if (!PS_PGSQL(current_db)) {
-		php_error(E_NOTICE, "session_pgsql has no database connection");
+		php_error(E_ERROR, "session_pgsql has no database connection");
 		RETURN_FALSE;
 	}
 
